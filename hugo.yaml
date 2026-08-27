@@ -2,7 +2,7 @@ baseURL: https://rcc-cubac.github.io/notes/
 title: 笔记
 theme: PaperMod
 
-languageCode: zh-cn
+locale: zh-cn
 defaultContentLanguage: zh-cn
 hasCJKLanguage: true
 
@@ -47,6 +47,9 @@ menu:
     - name: 笔记
       url: posts/
       weight: 10
+    - name: 几何处理
+      url: geo/
+      weight: 15
     - name: 论文阅读
       url: papers/
       weight: 20
@@ -64,5 +67,16 @@ markup:
   goldmark:
     renderer:
       unsafe: true
+    # 把数学公式原样交给 KaTeX 处理，否则 Markdown 解析器会吞掉 \! 与成对下划线，公式渲染出错
+    extensions:
+      passthrough:
+        enable: true
+        delimiters:
+          block:
+            - ['$$', '$$']
+            - ['\[', '\]']
+          inline:
+            - ['$', '$']
+            - ['\(', '\)']
   highlight:
     noClasses: false
