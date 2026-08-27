@@ -1,0 +1,68 @@
+baseURL: https://rcc-cubac.github.io/notes/
+title: 笔记
+theme: PaperMod
+
+languageCode: zh-cn
+defaultContentLanguage: zh-cn
+hasCJKLanguage: true
+
+# 不生成 RSS 与 sitemap，降低被发现的概率
+disableKinds:
+  - rss
+  - sitemap
+enableRobotsTXT: false
+
+# 给所有页面下发 robotsNoIndex，PaperMod 会据此输出 noindex 标记，阻止搜索引擎收录
+cascade:
+  - params:
+      robotsNoIndex: true
+
+pagination:
+  pagerSize: 20
+
+# PaperMod 搜索功能需要首页额外输出 JSON 索引
+outputs:
+  home:
+    - HTML
+    - JSON
+
+params:
+  env: production
+  defaultTheme: auto
+  math: true
+
+  ShowReadingTime: true
+  ShowToc: true
+  TocOpen: false
+  ShowBreadCrumbs: true
+  ShowPostNavLinks: true
+  ShowCodeCopyButtons: true
+
+  homeInfoParams:
+    Title: 笔记
+    Content: 日常笔记与论文阅读记录．
+
+menu:
+  main:
+    - name: 笔记
+      url: posts/
+      weight: 10
+    - name: 论文阅读
+      url: papers/
+      weight: 20
+    - name: 标签
+      url: tags/
+      weight: 30
+    - name: 归档
+      url: archives/
+      weight: 40
+    - name: 搜索
+      url: search/
+      weight: 50
+
+markup:
+  goldmark:
+    renderer:
+      unsafe: true
+  highlight:
+    noClasses: false
