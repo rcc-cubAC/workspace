@@ -1,4 +1,4 @@
-baseURL: https://rcc-cubac.github.io/notes/
+baseURL: https://rcc-cubac.github.io/workspace/
 title: 笔记
 theme: PaperMod
 
@@ -45,10 +45,10 @@ params:
 menu:
   main:
     - name: 笔记
-      url: posts/
+      url: notes/
       weight: 10
     - name: 几何处理
-      url: geo/
+      url: notes/geo/
       weight: 15
     - name: 论文阅读
       url: papers/

@@ -13,27 +13,33 @@
 不配图的笔记用单文件：
 
 ```
-content/geo/discrete-laplacian.md
+content/notes/geo/discrete-laplacian.md
 ```
 
 需要配图的笔记用页面包目录，图片与 `index.md` 放在同一目录，正文里用相对路径引用：
 
 ```
-content/geo/discrete-laplacian/
+content/notes/geo/discrete-laplacian/
   index.md
   cotangent-weights.png
 ```
 
 ## 栏目
 
-- `content/geo/` 数字几何处理笔记，当前主线
-- `content/posts/` 一般笔记
+- `content/notes/geo/` 数字几何处理笔记，当前主线，线上地址 `/workspace/notes/geo/`
+- `content/notes/` 其他笔记
 - `content/papers/` 论文阅读记录
 
-新建笔记用 `hugo new content`，Hugo 会按栏目名匹配 `archetypes/` 下的同名模板：
+新建几何笔记必须显式指定模板，因为 Hugo 按路径首层目录名匹配模板，写 `notes/geo/` 时它找的是 `archetypes/notes.md`：
 
 ```bash
-hugo new content geo/discrete-laplacian.md
+hugo new content --kind geo notes/geo/discrete-laplacian.md
+```
+
+其他笔记用默认模板即可：
+
+```bash
+hugo new content notes/<slug>.md
 ```
 
 ## front matter
