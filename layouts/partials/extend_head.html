@@ -12,3 +12,19 @@
     throwOnError: false
   });"></script>
 {{- end }}
+
+<style>
+  /* 列表里的文件夹条目：加文件夹图标，与具体笔记区分开 */
+  .section-entry .entry-hint-parent {
+    justify-content: flex-start;
+    align-items: center;
+    gap: 0.4em;
+  }
+
+  .section-entry .folder-icon {
+    width: 0.82em;
+    height: 0.82em;
+    flex: none;
+    color: var(--secondary);
+  }
+</style>
