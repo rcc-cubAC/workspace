@@ -1,0 +1,36 @@
+# 站点语言写作 zh-cn，主题自带的翻译文件名为 zh，两者匹配不上，
+# 所以在这里补一份简体中文词条．
+
+- id: prev_page
+  translation: "上一页"
+
+- id: next_page
+  translation: "下一页"
+
+- id: read_time
+  translation:
+    one: "1 分钟"
+    other: "{{ .Count }} 分钟"
+
+- id: words
+  translation:
+    one: "字"
+    other: "{{ .Count }} 字"
+
+- id: toc
+  translation: "目录"
+
+- id: translations
+  translation: "语言"
+
+- id: home
+  translation: "首页"
+
+- id: edit_post
+  translation: "编辑"
+
+- id: code_copy
+  translation: "复制"
+
+- id: code_copied
+  translation: "已复制！"

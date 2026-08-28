@@ -31,6 +31,9 @@ params:
   defaultTheme: auto
   math: true
 
+  # 主题默认的 :date_long 在本站的语言设置下会落回英文，这里显式指定中文格式
+  DateFormat: "2006年1月2日"
+
   ShowReadingTime: true
   ShowToc: true
   TocOpen: false
