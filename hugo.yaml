@@ -47,9 +47,6 @@ menu:
     - name: 笔记
       url: notes/
       weight: 10
-    - name: 几何处理
-      url: notes/geo/
-      weight: 15
     - name: 论文阅读
       url: papers/
       weight: 20
