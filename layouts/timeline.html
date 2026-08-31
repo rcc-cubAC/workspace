@@ -22,6 +22,7 @@
     "kind" $e.kind
     "note" (or $e.note "")
     "conf" $v.name
+    "id" ($v.name | urlize)
     "url" $v.url
     "place" $v.place) }}
 {{- end }}
@@ -46,28 +47,60 @@
         <th>距今</th>
         <th>会议</th>
         <th>事项</th>
+        <th aria-label="展开"></th>
       </tr>
     </thead>
     <tbody>
       {{- range $rows }}
       {{- $t := time.AsTime .date }}
-      <tr data-date="{{ .date }}" data-kind="{{ .kind }}" data-conf="{{ .conf }}" data-label="{{ .label }}">
+      <tr class="tl-row" data-date="{{ .date }}" data-kind="{{ .kind }}" data-conf="{{ .conf }}"
+        data-label="{{ .label }}" data-id="{{ .id }}" tabindex="0" role="button" aria-expanded="false">
         <td class="tl-date">
           <span class="tl-ymd">{{ $t.Format "2006年1月2日" }}</span>
           <span class="tl-week">周{{ index $weekday (int $t.Weekday) }}</span>
         </td>
         <td class="tl-left"></td>
-        <td class="tl-conf"><a href="{{ .url }}" target="_blank" rel="noopener">{{ .conf }}</a></td>
+        <td class="tl-conf">{{ .conf }}</td>
         <td class="tl-what">
           <span class="tl-badge tl-{{ .kind }}">{{ index $kindName .kind }}</span>
           {{ .label }}
           {{- with .note }}<span class="tl-note">{{ . }}</span>{{ end }}
-          {{- if eq .kind "conference" }}<span class="tl-place">{{ .place }}</span>{{ end }}
+        </td>
+        <td class="tl-caret" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
         </td>
       </tr>
       {{- end }}
     </tbody>
   </table>
+</div>
+
+{{/* 每个会议的完整时间线只渲染一份，点开时由脚本复制到对应行下方 */}}
+<div id="tl-details" hidden>
+  {{- range $v := site.Data.conferences.venues }}
+  <div class="tl-detail-src" data-for="{{ $v.name | urlize }}">
+    <div class="tl-detail-head">
+      <span class="tl-detail-name">{{ $v.name }}</span>
+      <span class="tl-detail-full">{{ $v.full }}</span>
+      <span class="tl-detail-place">{{ $v.place }}</span>
+      <a class="tl-detail-link" href="{{ $v.url }}" target="_blank" rel="noopener">官方页面</a>
+    </div>
+    <ol class="tl-steps">
+      {{- range $e := (sort $v.events "date") }}
+      {{- $st := time.AsTime $e.date }}
+      <li class="tl-step" data-date="{{ $e.date }}">
+        <span class="tl-step-date">{{ $st.Format "2006年1月2日" }}</span>
+        <span class="tl-badge tl-{{ $e.kind }}">{{ index $kindName $e.kind }}</span>
+        <span class="tl-step-label">{{ $e.label }}{{ with $e.note }}<span class="tl-note">{{ . }}</span>{{ end }}</span>
+        <span class="tl-step-left"></span>
+      </li>
+      {{- end }}
+    </ol>
+  </div>
+  {{- end }}
 </div>
 
 <h2 class="tl-h2">尚未公布日程的会议</h2>
@@ -84,7 +117,8 @@
 <p class="tl-updated">
   数据核对于 {{ (time.AsTime site.Data.conferences.updated).Format "2006年1月2日" }}．
   标注 AoE 的截止时间以 UTC 减 12 小时计，比北京时间晚 20 小时．
-  会议日程随时可能变动，投稿前请以各会议官方页面为准，点击会议名称即可跳转．
+  点击任意一行可以展开该会议的完整时间线．
+  会议日程随时可能变动，投稿前请以各会议官方页面为准．
 </p>
 
 <style>
@@ -137,8 +171,18 @@
     white-space: nowrap;
   }
 
-  .tl-table tr:last-child td {
+  .tl-table tbody tr:last-child td {
     border-bottom: none;
+  }
+
+  .tl-row {
+    cursor: pointer;
+  }
+
+  .tl-row:hover,
+  .tl-row:focus-visible {
+    background: var(--code-bg);
+    outline: none;
   }
 
   .tl-date {
@@ -160,6 +204,22 @@
     white-space: nowrap;
   }
 
+  .tl-caret {
+    width: 1px;
+    color: var(--secondary);
+  }
+
+  .tl-caret svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+    transition: transform 0.15s ease;
+  }
+
+  .tl-row[aria-expanded="true"] .tl-caret svg {
+    transform: rotate(180deg);
+  }
+
   .tl-badge {
     display: inline-block;
     padding: 1px 6px;
@@ -176,8 +236,7 @@
     color: var(--primary);
   }
 
-  .tl-note,
-  .tl-place {
+  .tl-note {
     margin-left: 6px;
     font-size: 13px;
     color: var(--secondary);
@@ -187,8 +246,113 @@
     opacity: 0.45;
   }
 
+  /* 点开某个会议时，它在总表里的全部流程行一并高亮 */
+  tr.tl-hl > td {
+    background: var(--entry);
+  }
+
+  tr.tl-hl > td:first-child {
+    box-shadow: inset 3px 0 0 var(--primary);
+  }
+
+  tr.tl-hl.tl-past {
+    opacity: 0.7;
+  }
+
+  tr.tl-open > td {
+    background: var(--code-bg);
+  }
+
   tr.tl-urgent .tl-left {
     color: var(--primary);
+    font-weight: 700;
+  }
+
+  /* 展开后的详情行 */
+  .tl-detail-row > td {
+    padding: 0;
+    background: var(--code-bg);
+  }
+
+  .tl-detail-inner {
+    padding: 14px 16px 16px;
+  }
+
+  .tl-detail-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .tl-detail-name {
+    font-weight: 700;
+  }
+
+  .tl-detail-full,
+  .tl-detail-place {
+    font-size: 13px;
+    color: var(--secondary);
+  }
+
+  .tl-detail-link {
+    font-size: 13px;
+    margin-left: auto;
+  }
+
+  .tl-steps {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 16px;
+    border-left: 2px solid var(--border);
+  }
+
+  .tl-step {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    padding: 5px 0;
+    font-size: 14px;
+  }
+
+  .tl-step::before {
+    content: "";
+    position: absolute;
+    left: -23px;
+    top: 10px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--theme);
+    border: 2px solid var(--border);
+  }
+
+  .tl-step-done {
+    opacity: 0.45;
+  }
+
+  .tl-step-next::before {
+    background: var(--primary);
+    border-color: var(--primary);
+  }
+
+  .tl-step-date {
+    min-width: 8.5em;
+    color: var(--secondary);
+  }
+
+  .tl-step-left {
+    margin-left: auto;
+    font-size: 13px;
+    color: var(--secondary);
+    white-space: nowrap;
+  }
+
+  .tl-step-next .tl-step-label,
+  .tl-step-next .tl-step-left {
     font-weight: 700;
   }
 
@@ -240,24 +404,33 @@
     var DAY = 86400000;
     var now = new Date();
     var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    var rows = Array.prototype.slice.call(document.querySelectorAll('.tl-table tbody tr'));
+
+    function parse(s) {
+      var p = s.split('-');
+      return new Date(+p[0], +p[1] - 1, +p[2]);
+    }
+
+    function daysFromToday(s) {
+      return Math.round((parse(s) - today) / DAY);
+    }
+
+    function describe(days) {
+      if (days < 0) { return '已过 ' + (-days) + ' 天'; }
+      if (days === 0) { return '就是今天'; }
+      return '还剩 ' + days + ' 天';
+    }
+
+    var rows = Array.prototype.slice.call(document.querySelectorAll('.tl-row'));
     var nearest = null;
 
     rows.forEach(function (tr) {
-      var parts = tr.getAttribute('data-date').split('-');
-      var d = new Date(+parts[0], +parts[1] - 1, +parts[2]);
-      var days = Math.round((d - today) / DAY);
-      var cell = tr.querySelector('.tl-left');
+      var days = daysFromToday(tr.getAttribute('data-date'));
+      tr.querySelector('.tl-left').textContent = describe(days);
 
       if (days < 0) {
-        cell.textContent = '已过 ' + (-days) + ' 天';
         tr.classList.add('tl-past');
-      } else if (days === 0) {
-        cell.textContent = '就是今天';
+      } else if (days <= 14) {
         tr.classList.add('tl-urgent');
-      } else {
-        cell.textContent = '还剩 ' + days + ' 天';
-        if (days <= 14) { tr.classList.add('tl-urgent'); }
       }
 
       if (days >= 0 && tr.getAttribute('data-kind') === 'deadline' && nearest === null) {
@@ -274,14 +447,80 @@
       next.textContent = '表中没有尚未到期的截止日期．';
     }
 
+    /* 展开某一行时，复制该会议的完整时间线插到它下面 */
+    var columns = document.querySelectorAll('.tl-table thead th').length;
+
+    function buildDetail(id) {
+      var src = document.querySelector('.tl-detail-src[data-for="' + id + '"]');
+      if (!src) { return null; }
+
+      var inner = src.cloneNode(true);
+      inner.classList.remove('tl-detail-src');
+      inner.classList.add('tl-detail-inner');
+      inner.removeAttribute('data-for');
+
+      Array.prototype.forEach.call(inner.querySelectorAll('.tl-step'), function (li) {
+        var days = daysFromToday(li.getAttribute('data-date'));
+        li.querySelector('.tl-step-left').textContent = describe(days);
+        if (days < 0) { li.classList.add('tl-step-done'); }
+      });
+
+      var upcoming = inner.querySelector('.tl-step:not(.tl-step-done)');
+      if (upcoming) { upcoming.classList.add('tl-step-next'); }
+
+      var td = document.createElement('td');
+      td.setAttribute('colspan', columns);
+      td.appendChild(inner);
+
+      var tr = document.createElement('tr');
+      tr.className = 'tl-detail-row';
+      tr.appendChild(td);
+      return tr;
+    }
+
+    function collapse(tr) {
+      var detail = tr.nextElementSibling;
+      if (detail && detail.classList.contains('tl-detail-row')) { detail.remove(); }
+      tr.setAttribute('aria-expanded', 'false');
+      tr.classList.remove('tl-hl', 'tl-open');
+    }
+
+    function toggle(tr) {
+      var open = tr.getAttribute('aria-expanded') === 'true';
+      rows.forEach(collapse);
+      if (open) { return; }
+
+      var id = tr.getAttribute('data-id');
+      var detail = buildDetail(id);
+      if (!detail) { return; }
+      tr.parentNode.insertBefore(detail, tr.nextSibling);
+      tr.setAttribute('aria-expanded', 'true');
+      tr.classList.add('tl-open');
+
+      rows.forEach(function (other) {
+        if (other.getAttribute('data-id') === id) { other.classList.add('tl-hl'); }
+      });
+    }
+
+    rows.forEach(function (tr) {
+      tr.addEventListener('click', function (ev) {
+        if (ev.target.closest('a')) { return; }
+        toggle(tr);
+      });
+      tr.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          toggle(tr);
+        }
+      });
+    });
+
     var box = document.getElementById('tl-hide-past');
     function apply() {
       rows.forEach(function (tr) {
-        if (box.checked && tr.classList.contains('tl-past')) {
-          tr.style.display = 'none';
-        } else {
-          tr.style.display = '';
-        }
+        var hide = box.checked && tr.classList.contains('tl-past');
+        tr.style.display = hide ? 'none' : '';
+        if (hide) { collapse(tr); }
       });
       try { localStorage.setItem('tl-hide-past', box.checked ? '1' : '0'); } catch (e) {}
     }
