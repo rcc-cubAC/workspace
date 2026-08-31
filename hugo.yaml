@@ -53,6 +53,9 @@ menu:
     - name: 论文阅读
       url: papers/
       weight: 20
+    - name: 会议日历
+      url: timeline/
+      weight: 25
     - name: 标签
       url: tags/
       weight: 30

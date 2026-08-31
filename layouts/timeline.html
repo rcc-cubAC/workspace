@@ -1,0 +1,294 @@
+{{- define "main" }}
+
+<header class="page-header">
+  {{- partial "breadcrumbs.html" . }}
+  <h1>{{ .Title }}</h1>
+  {{- with .Description }}
+  <div class="post-description">{{ . | markdownify }}</div>
+  {{- end }}
+</header>
+
+{{- if .Content }}
+<div class="post-content md-content">{{ .Content }}</div>
+{{- end }}
+
+{{/* 把每个会议的时间点摊平成一张表，再按日期排序 */}}
+{{- $rows := slice }}
+{{- range $v := site.Data.conferences.venues }}
+{{- range $e := $v.events }}
+{{- $rows = $rows | append (dict
+    "date" $e.date
+    "label" $e.label
+    "kind" $e.kind
+    "note" (or $e.note "")
+    "conf" $v.name
+    "url" $v.url
+    "place" $v.place) }}
+{{- end }}
+{{- end }}
+{{- $rows = sort $rows "date" }}
+
+{{- $weekday := slice "日" "一" "二" "三" "四" "五" "六" }}
+{{- $kindName := dict "deadline" "截稿" "process" "流程" "conference" "会议" }}
+
+<div class="tl-toolbar">
+  <p class="tl-next" id="tl-next">正在计算最近的截止日期……</p>
+  <label class="tl-filter">
+    <input type="checkbox" id="tl-hide-past"> 隐藏已过的时间点
+  </label>
+</div>
+
+<div class="tl-wrap">
+  <table class="tl-table">
+    <thead>
+      <tr>
+        <th>日期</th>
+        <th>距今</th>
+        <th>会议</th>
+        <th>事项</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{- range $rows }}
+      {{- $t := time.AsTime .date }}
+      <tr data-date="{{ .date }}" data-kind="{{ .kind }}" data-conf="{{ .conf }}" data-label="{{ .label }}">
+        <td class="tl-date">
+          <span class="tl-ymd">{{ $t.Format "2006年1月2日" }}</span>
+          <span class="tl-week">周{{ index $weekday (int $t.Weekday) }}</span>
+        </td>
+        <td class="tl-left"></td>
+        <td class="tl-conf"><a href="{{ .url }}" target="_blank" rel="noopener">{{ .conf }}</a></td>
+        <td class="tl-what">
+          <span class="tl-badge tl-{{ .kind }}">{{ index $kindName .kind }}</span>
+          {{ .label }}
+          {{- with .note }}<span class="tl-note">{{ . }}</span>{{ end }}
+          {{- if eq .kind "conference" }}<span class="tl-place">{{ .place }}</span>{{ end }}
+        </td>
+      </tr>
+      {{- end }}
+    </tbody>
+  </table>
+</div>
+
+<h2 class="tl-h2">尚未公布日程的会议</h2>
+<div class="tl-cards">
+  {{- range site.Data.conferences.unannounced }}
+  <div class="tl-card">
+    <h3><a href="{{ .url }}" target="_blank" rel="noopener">{{ .name }}</a> <small>{{ .full }}</small></h3>
+    <p class="tl-status">{{ .status }}．</p>
+    <p class="tl-ref">往年节奏，{{ .reference }}．</p>
+  </div>
+  {{- end }}
+</div>
+
+<p class="tl-updated">
+  数据核对于 {{ (time.AsTime site.Data.conferences.updated).Format "2006年1月2日" }}．
+  标注 AoE 的截止时间以 UTC 减 12 小时计，比北京时间晚 20 小时．
+  会议日程随时可能变动，投稿前请以各会议官方页面为准，点击会议名称即可跳转．
+</p>
+
+<style>
+  .tl-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 var(--gap);
+  }
+
+  .tl-next {
+    margin: 0;
+    font-weight: 600;
+  }
+
+  .tl-filter {
+    color: var(--secondary);
+    font-size: 15px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .tl-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  .tl-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 15px;
+    margin: 0;
+  }
+
+  .tl-table th,
+  .tl-table td {
+    padding: 9px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  .tl-table th {
+    background: var(--code-bg);
+    font-size: 14px;
+    color: var(--secondary);
+    white-space: nowrap;
+  }
+
+  .tl-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .tl-date {
+    white-space: nowrap;
+  }
+
+  .tl-week {
+    display: block;
+    font-size: 13px;
+    color: var(--secondary);
+  }
+
+  .tl-left {
+    white-space: nowrap;
+    color: var(--secondary);
+  }
+
+  .tl-conf {
+    white-space: nowrap;
+  }
+
+  .tl-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    margin-right: 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    border: 1px solid var(--border);
+    color: var(--secondary);
+    white-space: nowrap;
+  }
+
+  .tl-deadline {
+    border-color: currentColor;
+    color: var(--primary);
+  }
+
+  .tl-note,
+  .tl-place {
+    margin-left: 6px;
+    font-size: 13px;
+    color: var(--secondary);
+  }
+
+  tr.tl-past {
+    opacity: 0.45;
+  }
+
+  tr.tl-urgent .tl-left {
+    color: var(--primary);
+    font-weight: 700;
+  }
+
+  .tl-h2 {
+    margin: calc(var(--gap) * 2) 0 var(--gap);
+  }
+
+  .tl-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+  }
+
+  .tl-card {
+    padding: 12px 16px;
+    background: var(--entry);
+    border-radius: var(--radius);
+  }
+
+  .tl-card h3 {
+    margin: 0 0 6px;
+    font-size: 17px;
+  }
+
+  .tl-card h3 small {
+    font-weight: 400;
+    font-size: 13px;
+    color: var(--secondary);
+  }
+
+  .tl-card p {
+    margin: 4px 0;
+    font-size: 14px;
+  }
+
+  .tl-ref {
+    color: var(--secondary);
+  }
+
+  .tl-updated {
+    margin-top: calc(var(--gap) * 2);
+    font-size: 14px;
+    color: var(--secondary);
+  }
+</style>
+
+<script>
+  (function () {
+    var DAY = 86400000;
+    var now = new Date();
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var rows = Array.prototype.slice.call(document.querySelectorAll('.tl-table tbody tr'));
+    var nearest = null;
+
+    rows.forEach(function (tr) {
+      var parts = tr.getAttribute('data-date').split('-');
+      var d = new Date(+parts[0], +parts[1] - 1, +parts[2]);
+      var days = Math.round((d - today) / DAY);
+      var cell = tr.querySelector('.tl-left');
+
+      if (days < 0) {
+        cell.textContent = '已过 ' + (-days) + ' 天';
+        tr.classList.add('tl-past');
+      } else if (days === 0) {
+        cell.textContent = '就是今天';
+        tr.classList.add('tl-urgent');
+      } else {
+        cell.textContent = '还剩 ' + days + ' 天';
+        if (days <= 14) { tr.classList.add('tl-urgent'); }
+      }
+
+      if (days >= 0 && tr.getAttribute('data-kind') === 'deadline' && nearest === null) {
+        nearest = { days: days, text: tr.getAttribute('data-conf') + ' ' + tr.getAttribute('data-label') };
+      }
+    });
+
+    var next = document.getElementById('tl-next');
+    if (nearest) {
+      next.textContent = nearest.days === 0
+        ? '最近的截止日期就是今天，' + nearest.text + '．'
+        : '最近的截止日期还剩 ' + nearest.days + ' 天，' + nearest.text + '．';
+    } else {
+      next.textContent = '表中没有尚未到期的截止日期．';
+    }
+
+    var box = document.getElementById('tl-hide-past');
+    function apply() {
+      rows.forEach(function (tr) {
+        if (box.checked && tr.classList.contains('tl-past')) {
+          tr.style.display = 'none';
+        } else {
+          tr.style.display = '';
+        }
+      });
+      try { localStorage.setItem('tl-hide-past', box.checked ? '1' : '0'); } catch (e) {}
+    }
+    try { box.checked = localStorage.getItem('tl-hide-past') === '1'; } catch (e) {}
+    box.addEventListener('change', apply);
+    apply();
+  })();
+</script>
+
+{{- end }}

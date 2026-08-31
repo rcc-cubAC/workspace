@@ -1,0 +1,182 @@
+# 计算机视觉与图形学方向的会议日历数据．
+# 日期一律写成 YYYY-MM-DD 字符串，模板按字符串排序即为时间顺序．
+# kind 取值：deadline 投稿相关截止，process 评审流程节点，conference 会议召开．
+# 每次核对后更新 updated 字段．
+
+updated: "2026-08-31"
+
+venues:
+  - name: 3DV 2027
+    full: 国际三维视觉会议，第十四届
+    url: https://3dvconf.github.io/2027/
+    place: 希腊塞萨洛尼基
+    events:
+      - date: "2026-08-28"
+        label: 摘要注册与论文投稿截止
+        kind: deadline
+        note: AoE
+      - date: "2026-09-02"
+        label: 补充材料截止
+        kind: deadline
+        note: AoE
+      - date: "2026-10-27"
+        label: 初步通知
+        kind: process
+      - date: "2026-12-02"
+        label: 最终通知
+        kind: process
+      - date: "2027-04-06"
+        label: 会议召开，至 4 月 9 日
+        kind: conference
+
+  - name: WACV 2027
+    full: IEEE 计算机视觉应用冬季会议
+    url: https://wacv.thecvf.com/Conferences/2027/Dates
+    place: 美国奥兰多 Disney Springs
+    events:
+      - date: "2026-06-26"
+        label: 第一轮论文投稿截止
+        kind: deadline
+        note: AoE
+      - date: "2026-08-28"
+        label: 第二轮论文投稿截止，同时是第一轮的反驳与修改截止
+        kind: deadline
+        note: AoE
+      - date: "2026-08-30"
+        label: 第二轮补充材料截止
+        kind: deadline
+        note: AoE
+      - date: "2026-10-09"
+        label: 两轮最终决定
+        kind: process
+      - date: "2026-11-02"
+        label: 终稿截止
+        kind: deadline
+        note: AoE
+      - date: "2027-01-04"
+        label: 会议召开，至 1 月 8 日
+        kind: conference
+
+  - name: ICASSP 2027
+    full: IEEE 国际声学、语音与信号处理会议
+    url: https://2027.ieeeicassp.org/call-for-papers/
+    place: 加拿大多伦多
+    events:
+      - date: "2026-09-16"
+        label: 论文投稿截止
+        kind: deadline
+      - date: "2027-01-06"
+        label: 已发表期刊论文提交截止
+        kind: deadline
+      - date: "2027-01-13"
+        label: 录用通知
+        kind: process
+      - date: "2027-01-27"
+        label: 终稿截止
+        kind: deadline
+      - date: "2027-02-10"
+        label: 作者注册截止
+        kind: deadline
+      - date: "2027-05-16"
+        label: 会议召开，至 5 月 21 日
+        kind: conference
+
+  - name: ICLR 2027
+    full: 国际表征学习会议
+    url: https://iclr.cc/Conferences/2027/CallForPapers
+    place: 美国旧金山 Moscone Center
+    events:
+      - date: "2026-09-18"
+        label: 摘要截止
+        kind: deadline
+        note: AoE
+      - date: "2026-09-25"
+        label: 论文投稿截止
+        kind: deadline
+        note: AoE
+      - date: "2026-11-05"
+        label: 评审意见公布，作者与审稿人讨论期开始
+        kind: process
+      - date: "2026-11-18"
+        label: 作者与审稿人讨论期结束
+        kind: process
+      - date: "2026-12-16"
+        label: 最终决定
+        kind: process
+      - date: "2027-04-26"
+        label: 会议召开，至 4 月 30 日
+        kind: conference
+
+  - name: Eurographics 2027
+    full: 欧洲图形学会年会
+    url: https://eg2027.isti.cnr.it/call-for-papers/
+    place: 意大利卢卡
+    events:
+      - date: "2026-09-25"
+        label: 摘要与投稿表格截止
+        kind: deadline
+      - date: "2026-10-01"
+        label: 完整论文截止
+        kind: deadline
+      - date: "2026-12-18"
+        label: 有条件录用或拒稿通知
+        kind: process
+      - date: "2027-02-23"
+        label: 终稿截止
+        kind: deadline
+      - date: "2027-05-10"
+        label: 会议召开，至 5 月 14 日
+        kind: conference
+
+  - name: CoRL 2026
+    full: 机器人学习会议
+    url: https://www.corl.org/
+    place: 美国奥斯汀
+    events:
+      - date: "2026-11-09"
+        label: 会议召开，至 11 月 12 日，投稿已截止
+        kind: conference
+
+  - name: SIGGRAPH 2027
+    full: ACM 计算机图形与交互技术会议
+    url: https://www.siggraph.org/siggraph-events/conferences/
+    place: 地点未公布
+    events:
+      - date: "2027-08-08"
+        label: 会议召开，至 8 月 12 日
+        kind: conference
+
+  - name: SIGGRAPH Asia 2027
+    full: ACM 亚洲计算机图形与交互技术会议
+    url: https://asia.siggraph.org/2026/about-the-event/siggraph-asia-2027/
+    place: 日本东京
+    events:
+      - date: "2027-11-30"
+        label: 会议召开，至 12 月 3 日
+        kind: conference
+
+# 官方尚未发布日程的会议．reference 一栏写上一届的对应日期，只作节奏参照，不是本届的截止时间．
+unannounced:
+  - name: CVPR 2027
+    full: IEEE 计算机视觉与模式识别会议
+    url: https://cvpr.thecvf.com/
+    status: 官方 2027 年日程页面目前是 404，主站只有 2026 年的内容
+    reference: 上一届的摘要注册为 2025 年 11 月 7 日，论文投稿为 2025 年 11 月 13 日，因此本届大概率仍在 11 月中旬
+
+  - name: ICCV 2027
+    full: IEEE 国际计算机视觉会议
+    url: https://iccv.thecvf.com/
+    status: 官方站点目前只有 2025 年的内容，日程与地点均未发布．坊间流传在香港、2027 年 10 月举行，未见官方页面佐证
+    reference: 上两届的投稿截止分别为 2025 年 3 月 7 日与 2023 年 3 月 8 日，按两年一届的节奏，本届预计在 2027 年 3 月上旬
+
+  - name: CoRL 2027
+    full: 机器人学习会议
+    url: https://www.corl.org/
+    status: 官方尚未发布
+    reference: CoRL 2026 于 2026 年 11 月 9 日至 12 日在奥斯汀举行
+
+  - name: NeurIPS 2027
+    full: 神经信息处理系统大会
+    url: https://neurips.cc/
+    status: 官方尚未发布征稿
+    reference: 上一届的摘要截止为 2026 年 5 月 4 日
