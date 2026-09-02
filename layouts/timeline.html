@@ -22,6 +22,7 @@
     "kind" $e.kind
     "note" (or $e.note "")
     "conf" $v.name
+    "ccf" $v.ccf
     "id" ($v.name | urlize)
     "url" $v.url
     "place" $v.place) }}
@@ -60,7 +61,11 @@
           <span class="tl-week">周{{ index $weekday (int $t.Weekday) }}</span>
         </td>
         <td class="tl-left"></td>
-        <td class="tl-conf">{{ .conf }}</td>
+        <td class="tl-conf">
+          {{ .conf }}
+          {{- if .ccf }}<span class="tl-ccf tl-ccf-{{ lower .ccf }}">CCF {{ .ccf }}</span>
+          {{- else }}<span class="tl-ccf tl-ccf-none">未收录</span>{{ end }}
+        </td>
         <td class="tl-what">
           <span class="tl-badge tl-{{ .kind }}">{{ index $kindName .kind }}</span>
           {{ .label }}
@@ -86,6 +91,9 @@
       <span class="tl-detail-name">{{ $v.name }}</span>
       <span class="tl-detail-full">{{ $v.full }}</span>
       <span class="tl-detail-place">{{ $v.place }}</span>
+      {{- if $v.ccf }}<span class="tl-ccf tl-ccf-{{ lower $v.ccf }}">CCF {{ $v.ccf }}</span>
+      {{- else }}<span class="tl-ccf tl-ccf-none">CCF 未收录</span>{{ end }}
+      {{- with $v.ccf_note }}<span class="tl-ccf-note">{{ . }}</span>{{ end }}
       <a class="tl-detail-link" href="{{ $v.url }}" target="_blank" rel="noopener">官方页面</a>
     </div>
     <ol class="tl-steps">
@@ -107,7 +115,12 @@
 <div class="tl-cards">
   {{- range site.Data.conferences.unannounced }}
   <div class="tl-card">
-    <h3><a href="{{ .url }}" target="_blank" rel="noopener">{{ .name }}</a> <small>{{ .full }}</small></h3>
+    <h3>
+      <a href="{{ .url }}" target="_blank" rel="noopener">{{ .name }}</a>
+      {{- if .ccf }}<span class="tl-ccf tl-ccf-{{ lower .ccf }}">CCF {{ .ccf }}</span>
+      {{- else }}<span class="tl-ccf tl-ccf-none">CCF 未收录</span>{{ end }}
+      <small>{{ .full }}</small>
+    </h3>
     <p class="tl-status">{{ .status }}．</p>
     <p class="tl-ref">往年节奏，{{ .reference }}．</p>
   </div>
@@ -119,6 +132,13 @@
   标注 AoE 的截止时间以 UTC 减 12 小时计，比北京时间晚 20 小时．
   点击任意一行可以展开该会议的完整时间线．
   会议日程随时可能变动，投稿前请以各会议官方页面为准．
+</p>
+
+<p class="tl-updated">
+  等级依据《CCF 推荐国际学术会议和期刊目录》{{ site.Data.conferences.ccf_edition }}，
+  见 <a href="{{ site.Data.conferences.ccf_url }}" target="_blank" rel="noopener">CCF 官方目录</a>．
+  ICLR 于该版首次收录并列入 A 类，IJCAI 由 A 降为 B．WACV 与 CoRL 目前未被收录．
+  CCF 声明该目录仅供学术发表参考，不作为学术评价标准．
 </p>
 
 <style>
@@ -354,6 +374,55 @@
   .tl-step-next .tl-step-label,
   .tl-step-next .tl-step-left {
     font-weight: 700;
+  }
+
+  .tl-ccf {
+    display: inline-block;
+    margin-left: 6px;
+    margin-top: 3px;
+    padding: 0 5px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.6;
+    white-space: nowrap;
+  }
+
+  .tl-conf .tl-ccf {
+    display: block;
+    width: fit-content;
+    margin-left: 0;
+  }
+
+  .tl-ccf-a {
+    background: var(--primary);
+    color: var(--theme);
+  }
+
+  .tl-ccf-b {
+    border: 1px solid var(--primary);
+    color: var(--primary);
+  }
+
+  .tl-ccf-c {
+    border: 1px solid var(--border);
+    color: var(--secondary);
+  }
+
+  .tl-ccf-none {
+    color: var(--secondary);
+    font-weight: 400;
+  }
+
+  .tl-detail-head .tl-ccf {
+    margin-left: 0;
+    margin-top: 0;
+  }
+
+  .tl-ccf-note {
+    flex-basis: 100%;
+    font-size: 13px;
+    color: var(--secondary);
   }
 
   .tl-h2 {

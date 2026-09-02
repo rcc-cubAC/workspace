@@ -5,10 +5,16 @@
 
 updated: "2026-08-31"
 
+# CCF 等级依据《CCF 推荐国际学术会议和期刊目录》第七版，2026 年 3 月 31 日发布，
+# 4 月 9 日勘误．ccf 为空表示该目录未收录，具体缘由写在 ccf_note．
+ccf_edition: 第七版，2026 年 3 月发布
+ccf_url: https://www.ccf.org.cn/Academic_Evaluation/By_category/
+
 venues:
   - name: 3DV 2027
     full: 国际三维视觉会议，第十四届
     url: https://3dvconf.github.io/2027/
+    ccf: "C"
     place: 希腊塞萨洛尼基
     events:
       - date: "2026-08-28"
@@ -32,6 +38,7 @@ venues:
   - name: WACV 2027
     full: IEEE 计算机视觉应用冬季会议
     url: https://wacv.thecvf.com/Conferences/2027/Dates
+    ccf: ""
     place: 美国奥兰多 Disney Springs
     events:
       - date: "2026-06-26"
@@ -60,6 +67,7 @@ venues:
   - name: ICASSP 2027
     full: IEEE 国际声学、语音与信号处理会议
     url: https://2027.ieeeicassp.org/call-for-papers/
+    ccf: "B"
     place: 加拿大多伦多
     events:
       - date: "2026-09-16"
@@ -84,6 +92,8 @@ venues:
   - name: ICLR 2027
     full: 国际表征学习会议
     url: https://iclr.cc/Conferences/2027/CallForPapers
+    ccf: "A"
+    ccf_note: 第七版首次收录，直接列入 A 类
     place: 美国旧金山 Moscone Center
     events:
       - date: "2026-09-18"
@@ -110,6 +120,7 @@ venues:
   - name: Eurographics 2027
     full: 欧洲图形学会年会
     url: https://eg2027.isti.cnr.it/call-for-papers/
+    ccf: "B"
     place: 意大利卢卡
     events:
       - date: "2026-09-25"
@@ -131,6 +142,7 @@ venues:
   - name: CoRL 2026
     full: 机器人学习会议
     url: https://www.corl.org/
+    ccf: ""
     place: 美国奥斯汀
     events:
       - date: "2026-11-09"
@@ -140,6 +152,7 @@ venues:
   - name: SIGGRAPH 2027
     full: ACM 计算机图形与交互技术会议
     url: https://www.siggraph.org/siggraph-events/conferences/
+    ccf: "A"
     place: 地点未公布
     events:
       - date: "2027-08-08"
@@ -149,6 +162,8 @@ venues:
   - name: SIGGRAPH Asia 2027
     full: ACM 亚洲计算机图形与交互技术会议
     url: https://asia.siggraph.org/2026/about-the-event/siggraph-asia-2027/
+    ccf: ""
+    ccf_note: CCF 目录只收录 SIGGRAPH，未单列亚洲会场，其技术论文发表于 ACM TOG，该期刊为 CCF A 类
     place: 日本东京
     events:
       - date: "2027-11-30"
@@ -160,23 +175,27 @@ unannounced:
   - name: CVPR 2027
     full: IEEE 计算机视觉与模式识别会议
     url: https://cvpr.thecvf.com/
+    ccf: "A"
     status: 官方 2027 年日程页面目前是 404，主站只有 2026 年的内容
     reference: 上一届的摘要注册为 2025 年 11 月 7 日，论文投稿为 2025 年 11 月 13 日，因此本届大概率仍在 11 月中旬
 
   - name: ICCV 2027
     full: IEEE 国际计算机视觉会议
     url: https://iccv.thecvf.com/
+    ccf: "A"
     status: 官方站点目前只有 2025 年的内容，日程与地点均未发布．坊间流传在香港、2027 年 10 月举行，未见官方页面佐证
     reference: 上两届的投稿截止分别为 2025 年 3 月 7 日与 2023 年 3 月 8 日，按两年一届的节奏，本届预计在 2027 年 3 月上旬
 
   - name: CoRL 2027
     full: 机器人学习会议
     url: https://www.corl.org/
+    ccf: ""
     status: 官方尚未发布
     reference: CoRL 2026 于 2026 年 11 月 9 日至 12 日在奥斯汀举行
 
   - name: NeurIPS 2027
     full: 神经信息处理系统大会
     url: https://neurips.cc/
+    ccf: "A"
     status: 官方尚未发布征稿
     reference: 上一届的摘要截止为 2026 年 5 月 4 日
