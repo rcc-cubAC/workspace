@@ -27,6 +27,7 @@ content/notes/geo/discrete-laplacian/
 ## 栏目
 
 - `content/notes/geo/` 数字几何处理笔记，当前主线，线上地址 `/workspace/notes/geo/`
+- `content/notes/robotics/` 机器人与 VLA 笔记，线上地址 `/workspace/notes/robotics/`
 - `content/notes/` 其他笔记
 - `content/papers/` 论文阅读记录
 
