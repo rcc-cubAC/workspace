@@ -1,5 +1,5 @@
 baseURL: https://rcc-cubac.github.io/workspace/
-title: 笔记
+title: 工作区
 theme: PaperMod
 
 locale: zh-cn
@@ -47,8 +47,8 @@ params:
   ShowCodeCopyButtons: true
 
   homeInfoParams:
-    Title: 笔记
-    Content: 日常笔记与论文阅读记录．
+    Title: 工作区
+    Content: 学习笔记、论文阅读记录、会议日历，以及几个在浏览器里直接使用的小工具．
 
 menu:
   main:
