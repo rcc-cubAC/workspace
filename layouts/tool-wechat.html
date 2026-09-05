@@ -1,0 +1,864 @@
+{{- define "main" }}
+
+<header class="page-header">
+  {{- partial "breadcrumbs.html" . }}
+  <h1>{{ .Title }}</h1>
+  {{- with .Description }}
+  <div class="post-description">{{ . | markdownify }}</div>
+  {{- end }}
+</header>
+
+<div class="wt-app">
+  <div class="wt-drop" id="wt-drop" tabindex="0" role="button" aria-label="选择或拖入截图">
+    <p class="wt-drop-main">把微信聊天截图拖到这里，或点击选择文件，也可以直接粘贴</p>
+    <p class="wt-drop-sub">支持长图．多张图按选择顺序拼接．识别全程在本机浏览器完成，图片不上传</p>
+    <input type="file" id="wt-file" accept="image/*" multiple hidden>
+  </div>
+
+  <div class="wt-opts">
+    <label>我的称呼 <input id="wt-me" value="我" size="6"></label>
+    <label>对方称呼 <input id="wt-other" value="对方" size="6"></label>
+    <label>输出格式
+      <select id="wt-format">
+        <option value="txt">纯文本</option>
+        <option value="md">Markdown</option>
+      </select>
+    </label>
+    <label class="wt-check"><input type="checkbox" id="wt-debug"> 显示判定示意图</label>
+  </div>
+
+  <div class="wt-progress" id="wt-progress" hidden>
+    <div class="wt-bar"><span id="wt-bar-fill"></span></div>
+    <p class="wt-status" id="wt-status"></p>
+  </div>
+
+  <div class="wt-result" id="wt-result" hidden>
+    <div class="wt-actions">
+      <button type="button" id="wt-copy">复制文本</button>
+      <a id="wt-download" download="chat.txt">下载 .txt</a>
+      <span class="wt-count" id="wt-count"></span>
+    </div>
+    <textarea id="wt-text" rows="18" spellcheck="false"></textarea>
+    <div class="wt-canvas-wrap" id="wt-canvas-wrap" hidden></div>
+  </div>
+</div>
+
+{{- if .Content }}
+<div class="post-content md-content">{{ .Content }}</div>
+{{- end }}
+
+<style>
+  .wt-app {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: calc(var(--gap) * 2);
+  }
+
+  .wt-drop {
+    padding: 34px 20px;
+    text-align: center;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    background: var(--entry);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .wt-drop:hover,
+  .wt-drop:focus-visible,
+  .wt-drop.is-over {
+    border-color: var(--primary);
+    outline: none;
+  }
+
+  .wt-drop-main {
+    margin: 0 0 6px;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .wt-drop-sub {
+    margin: 0;
+    font-size: 13px;
+    color: var(--secondary);
+  }
+
+  .wt-opts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 22px;
+    font-size: 14px;
+    color: var(--secondary);
+  }
+
+  .wt-opts input[type="text"],
+  .wt-opts input:not([type]),
+  .wt-opts select {
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--theme);
+    color: var(--primary);
+    font-size: 14px;
+  }
+
+  .wt-check {
+    cursor: pointer;
+  }
+
+  .wt-bar {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--border);
+    overflow: hidden;
+  }
+
+  .wt-bar span {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--primary);
+    transition: width 0.2s ease;
+  }
+
+  .wt-status {
+    margin: 8px 0 0;
+    font-size: 14px;
+    color: var(--secondary);
+  }
+
+  .wt-status.is-error {
+    color: #d9534f;
+  }
+
+  .wt-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .wt-actions button,
+  .wt-actions a {
+    padding: 5px 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--entry);
+    color: var(--primary);
+    font-size: 14px;
+    cursor: pointer;
+    text-decoration: none;
+  }
+
+  .wt-actions button:hover,
+  .wt-actions a:hover {
+    border-color: var(--primary);
+  }
+
+  .wt-count {
+    font-size: 13px;
+    color: var(--secondary);
+  }
+
+  #wt-text {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--code-bg);
+    color: var(--content);
+    font-size: 15px;
+    line-height: 1.7;
+    resize: vertical;
+  }
+
+  .wt-canvas-wrap {
+    margin-top: 14px;
+    max-height: 70vh;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  .wt-canvas-wrap canvas {
+    display: block;
+    max-width: 100%;
+  }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script>
+  (function () {
+    'use strict';
+
+    var $ = function (id) { return document.getElementById(id); };
+
+    /* ---------------- 参数与正则 ---------------- */
+
+    var TILE_H = 1600;   // 标称分块高度
+    var SEARCH = 400;    // 在标称切割线附近这个范围内找一行纯底色作为实际切割线
+    var SCALE = 4;       // 版面分割在 1/4 分辨率上做
+    var CJK = /[㐀-鿿　-〿＀-￯]/;
+    var TIME_RE = /\d{1,2}:\d{2}|昨天|前天|星期[一二三四五六日天]|周[一二三四五六日天]|上午|下午|晚上|凌晨|中午|\d{4}年|\d{1,2}月\d{1,2}日|\d{4}[-\/]\d{1,2}[-\/]\d{1,2}/;
+    var SYSTEM_RE = /撤回了一条消息|拍了拍|以上是打招呼|加入了群聊|邀请.*加入|红包|对方已|你已添加|语音通话|视频通话|已过期|消息已发出|朋友验证/;
+    var UI_NOISE = { '返回': 1, '按住 说话': 1, '按住说话': 1, '发送': 1, '微信': 1, '…': 1, '‹': 1, '<': 1, '...': 1 };
+
+    var query = new URLSearchParams(location.search);
+    var LANGS = query.get('lang') || 'chi_sim';   // 中文字库自带拉丁字母与数字；混入英文字库会让整行误判为英文
+
+    /* ---------------- 界面状态 ---------------- */
+
+    var busy = false;
+
+    function setStatus(text, ratio, isError) {
+      $('wt-progress').hidden = false;
+      $('wt-status').textContent = text;
+      $('wt-status').classList.toggle('is-error', !!isError);
+      if (typeof ratio === 'number') {
+        $('wt-bar-fill').style.width = Math.max(0, Math.min(1, ratio)) * 100 + '%';
+      }
+    }
+
+    /* ---------------- 识别引擎 ---------------- */
+
+    var worker = null;
+
+    async function getWorker() {
+      if (worker) { return worker; }
+      setStatus('正在加载识别模型，首次使用需要下载几 MB……', 0);
+      var w = await Tesseract.createWorker(LANGS, 1, {
+        langPath: 'https://tessdata.projectnaptha.com/4.0.0_fast',
+        logger: function (m) {
+          if (m.status === 'loading language traineddata' || m.status === 'loading tesseract core') {
+            setStatus('加载识别模型 ' + Math.round((m.progress || 0) * 100) + '%', (m.progress || 0) * 0.15);
+          }
+        }
+      });
+      await w.setParameters({ preserve_interword_spaces: '1', tessedit_pageseg_mode: '6' });
+      worker = w;
+      return w;
+    }
+
+    /* ---------------- 图像读入 ---------------- */
+
+    function loadImage(file) {
+      return new Promise(function (resolve, reject) {
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function () { URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('无法读取图片 ' + (file.name || ''))); };
+        img.src = url;
+      });
+    }
+
+    /* 不建整图画布，逐块取像素，避免超长图撞上浏览器的画布尺寸上限 */
+    function makeTile(img, y0, y1) {
+      var c = document.createElement('canvas');
+      c.width = img.naturalWidth;
+      c.height = y1 - y0;
+      var ctx = c.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, y0, c.width, c.height, 0, 0, c.width, c.height);
+      return { canvas: c, y0: y0, y1: y1, w: c.width, h: c.height, data: ctx.getImageData(0, 0, c.width, c.height).data };
+    }
+
+    /* ---------------- 颜色 ---------------- */
+
+    function colorDistance(a, b) {
+      var dr = a[0] - b[0], dg = a[1] - b[1], db = a[2] - b[2];
+      return Math.sqrt(dr * dr + dg * dg + db * db);
+    }
+
+    function hueSat(c) {
+      var r = c[0] / 255, g = c[1] / 255, b = c[2] / 255;
+      var max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+      var h = 0;
+      if (d > 0) {
+        if (max === r) { h = ((g - b) / d) % 6; }
+        else if (max === g) { h = (b - r) / d + 2; }
+        else { h = (r - g) / d + 4; }
+        h = (h * 60 + 360) % 360;
+      }
+      return { h: h, s: max > 0 ? d / max : 0 };
+    }
+
+    function luminance(c) { return 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]; }
+
+    function isGreen(c) {
+      var hs = hueSat(c);
+      return hs.h >= 70 && hs.h <= 170 && hs.s >= 0.25;
+    }
+
+    /* 主色：按 16 级量化找众数色块，再对该色块内的像素取均值 */
+    function DominantColor() {
+      this.count = new Uint32Array(4096);
+      this.sum = new Float64Array(4096 * 3);
+    }
+
+    DominantColor.prototype.add = function (r, g, b) {
+      var k = (r >> 4) * 256 + (g >> 4) * 16 + (b >> 4);
+      this.count[k]++;
+      this.sum[k * 3] += r; this.sum[k * 3 + 1] += g; this.sum[k * 3 + 2] += b;
+    };
+
+    DominantColor.prototype.result = function () {
+      var best = 0;
+      for (var k = 1; k < 4096; k++) { if (this.count[k] > this.count[best]) { best = k; } }
+      var n = this.count[best] || 1;
+      return [this.sum[best * 3] / n, this.sum[best * 3 + 1] / n, this.sum[best * 3 + 2] / n];
+    };
+
+    /* 页面底色取最左最右两条边缘竖条，那里基本不会被气泡和头像盖住 */
+    function tileBackground(tile) {
+      var acc = new DominantColor(), d = tile.data, m = 6;
+      for (var y = 0; y < tile.h; y += 2) {
+        var row = y * tile.w;
+        for (var x = 0; x < m; x++) {
+          var k1 = (row + x) * 4, k2 = (row + tile.w - 1 - x) * 4;
+          acc.add(d[k1], d[k1 + 1], d[k1 + 2]);
+          acc.add(d[k2], d[k2 + 1], d[k2 + 2]);
+        }
+      }
+      return acc.result();
+    }
+
+    /* ---------------- 自适应切割 ---------------- */
+
+    function rowBgFraction(tile, row, bg) {
+      var d = tile.data, base = row * tile.w, hit = 0, total = 0;
+      for (var x = 0; x < tile.w; x += 3) {
+        var k = (base + x) * 4;
+        total++;
+        if (colorDistance([d[k], d[k + 1], d[k + 2]], bg) < 16) { hit++; }
+      }
+      return hit / total;
+    }
+
+    /* 在标称位置附近找一行纯底色，切在气泡之间，保证气泡不被切断 */
+    function findCut(tile, bg, nominal) {
+      for (var k = 0; k <= SEARCH; k++) {
+        var cands = [nominal + k, nominal - k];
+        for (var i = 0; i < cands.length; i++) {
+          var r = cands[i];
+          if (r >= 200 && r < tile.h && rowBgFraction(tile, r, bg) >= 0.97) { return r; }
+        }
+      }
+      return Math.min(nominal, tile.h);
+    }
+
+    /* ---------------- 版面分割 ---------------- */
+
+    function buildMasks(tile, hLimit, bg) {
+      var w = tile.w, ws = Math.ceil(w / SCALE), hs = Math.ceil(hLimit / SCALE);
+      var me = new Uint8Array(ws * hs), other = new Uint8Array(ws * hs), far = new Uint8Array(ws * hs);
+      var d = tile.data, bgLum = luminance(bg);
+      for (var ys = 0; ys < hs; ys++) {
+        var y = Math.min(ys * SCALE, hLimit - 1);
+        for (var xs = 0; xs < ws; xs++) {
+          var x = Math.min(xs * SCALE, w - 1);
+          var k = (y * w + x) * 4, c = [d[k], d[k + 1], d[k + 2]], i = ys * ws + xs;
+          if (colorDistance(c, bg) < 14) { continue; }
+          far[i] = 1;
+          if (isGreen(c)) { me[i] = 1; continue; }
+          var hs2 = hueSat(c), dl = luminance(c) - bgLum;
+          /* 对方气泡不论深浅模式都比页面底色略亮且几乎无色 */
+          if (hs2.s < 0.15 && dl > 6 && dl < 70) { other[i] = 1; }
+        }
+      }
+      return { ws: ws, hs: hs, me: me, other: other, far: far };
+    }
+
+    /* 四连通的连通区域标记，返回全分辨率坐标的包围盒 */
+    function components(mask, ws, hs) {
+      var labels = new Int32Array(ws * hs), parent = [0], next = 1;
+      function find(a) { while (parent[a] !== a) { parent[a] = parent[parent[a]]; a = parent[a]; } return a; }
+      for (var y = 0; y < hs; y++) {
+        for (var x = 0; x < ws; x++) {
+          var i = y * ws + x;
+          if (!mask[i]) { continue; }
+          var up = y > 0 && mask[i - ws] ? find(labels[i - ws]) : 0;
+          var left = x > 0 && mask[i - 1] ? find(labels[i - 1]) : 0;
+          if (!up && !left) { labels[i] = next; parent.push(next); next++; }
+          else if (up && left) { var lo = Math.min(up, left), hi = Math.max(up, left); parent[hi] = lo; labels[i] = lo; }
+          else { labels[i] = up || left; }
+        }
+      }
+      var comps = {};
+      for (var j = 0; j < labels.length; j++) {
+        if (!labels[j]) { continue; }
+        var r = find(labels[j]), cx = j % ws, cy = (j - cx) / ws;
+        var c = comps[r];
+        if (!c) { c = comps[r] = { x0: cx, y0: cy, x1: cx, y1: cy, n: 0 }; }
+        if (cx < c.x0) { c.x0 = cx; } if (cx > c.x1) { c.x1 = cx; }
+        if (cy < c.y0) { c.y0 = cy; } if (cy > c.y1) { c.y1 = cy; }
+        c.n++;
+      }
+      return Object.keys(comps).map(function (k) {
+        var c = comps[k];
+        return { x0: c.x0 * SCALE, y0: c.y0 * SCALE, x1: (c.x1 + 1) * SCALE, y1: (c.y1 + 1) * SCALE, n: c.n * SCALE * SCALE };
+      });
+    }
+
+    function pickBubbles(comps, role, W) {
+      return comps.filter(function (c) {
+        var w = c.x1 - c.x0, h = c.y1 - c.y0;
+        if (w < 50 || h < 34) { return false; }
+        if (c.n / (w * h) < 0.4) { return false; }
+        /* 贴着左右边缘的小方块是头像，不是气泡 */
+        var ratio = w / h, square = ratio > 0.8 && ratio < 1.25;
+        if (square && w < 0.12 * W && (c.x0 < 0.06 * W || c.x1 > 0.94 * W)) { return false; }
+        return true;
+      }).map(function (c) { c.role = role; return c; });
+    }
+
+    function inside(c, box) {
+      var cx = (c.x0 + c.x1) / 2, cy = (c.y0 + c.y1) / 2;
+      return cx >= box.x0 && cx <= box.x1 && cy >= box.y0 && cy <= box.y1;
+    }
+
+    /* 头像、贴图、图片等大块非底色区域，识别时要涂掉，免得被当成文字 */
+    function pickBlocks(comps, bubbles) {
+      return comps.filter(function (c) {
+        var w = c.x1 - c.x0, h = c.y1 - c.y0;
+        if (w < 50 || h < 50 || c.n / (w * h) < 0.5) { return false; }
+        for (var i = 0; i < bubbles.length; i++) { if (inside(c, bubbles[i])) { return false; } }
+        return true;
+      });
+    }
+
+    /* ---------------- 文字清洗 ---------------- */
+
+    function cleanText(t) {
+      t = t.replace(/\s+/g, ' ').trim();
+      var out = '';
+      for (var i = 0; i < t.length; i++) {
+        var ch = t[i];
+        if (ch === ' ' && i > 0 && i + 1 < t.length && CJK.test(t[i - 1]) && CJK.test(t[i + 1])) { continue; }
+        out += ch;
+      }
+      return out;
+    }
+
+    function hasContent(t) { return /[㐀-鿿A-Za-z0-9]/.test(t); }
+
+    function joinWrapped(parts) {
+      var out = '';
+      parts.forEach(function (p) {
+        if (out && /[A-Za-z0-9]$/.test(out) && /^[A-Za-z0-9]/.test(p)) { out += ' '; }
+        out += p;
+      });
+      return out;
+    }
+
+    /* ---------------- 识别 ---------------- */
+
+    function invertCanvas(c) {
+      var ctx = c.getContext('2d'), im = ctx.getImageData(0, 0, c.width, c.height), d = im.data;
+      for (var k = 0; k < d.length; k += 4) { d[k] = 255 - d[k]; d[k + 1] = 255 - d[k + 1]; d[k + 2] = 255 - d[k + 2]; }
+      ctx.putImageData(im, 0, 0);
+    }
+
+    function cropCanvas(tile, x0, y0, x1, y1, scale) {
+      var c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round((x1 - x0) * scale));
+      c.height = Math.max(1, Math.round((y1 - y0) * scale));
+      c.getContext('2d').drawImage(tile.canvas, x0, y0, x1 - x0, y1 - y0, 0, 0, c.width, c.height);
+      return c;
+    }
+
+    /* 一块里的所有气泡拼成一张竖排长图只识别一次，再按纵坐标把识别行分回各气泡．
+       每次识别调用有固定开销，逐气泡调用太慢；小气泡还必须放大，否则 Tesseract 直接放弃． */
+    async function ocrBubbles(wk, tile, bubbles, hLimit, dark, bg) {
+      if (!bubbles.length) { return []; }
+      var pad = 6, gap = 40;
+      var minH = Math.min.apply(null, bubbles.map(function (b) { return b.y1 - b.y0; }));
+      var scale = Math.min(3, Math.max(1.5, 200 / minH));
+      var crops = bubbles.map(function (b) {
+        return { x0: Math.max(0, b.x0 - pad), y0: Math.max(0, b.y0 - pad),
+                 x1: Math.min(tile.w, b.x1 + pad), y1: Math.min(hLimit, b.y1 + pad), oy: 0 };
+      });
+      var totalW = 0, totalH = 0;
+      crops.forEach(function (c) {
+        c.oy = totalH;
+        c.sh = (c.y1 - c.y0) * scale;
+        totalH += c.sh + gap;
+        totalW = Math.max(totalW, (c.x1 - c.x0) * scale);
+      });
+      var canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(totalW);
+      canvas.height = Math.ceil(totalH);
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = 'rgb(' + Math.round(bg[0]) + ',' + Math.round(bg[1]) + ',' + Math.round(bg[2]) + ')';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      crops.forEach(function (c) {
+        ctx.drawImage(tile.canvas, c.x0, c.y0, c.x1 - c.x0, c.y1 - c.y0, 0, c.oy, (c.x1 - c.x0) * scale, c.sh);
+      });
+      if (dark) { invertCanvas(canvas); }
+
+      var res = await wk.recognize(canvas);
+      var texts = crops.map(function () { return []; });
+      (res.data.lines || []).forEach(function (l) {
+        var cy = (l.bbox.y0 + l.bbox.y1) / 2;
+        for (var i = 0; i < crops.length; i++) {
+          if (cy >= crops[i].oy && cy < crops[i].oy + crops[i].sh) {
+            var t = cleanText(l.text);
+            if (hasContent(t)) { texts[i].push(t); }
+            return;
+          }
+        }
+      });
+      return texts.map(joinWrapped);
+    }
+
+    /* 气泡与大块之外仍有非底色像素的行段，就是时间戳、昵称、系统提示所在的位置 */
+    function findMetaBands(masks, bubbles, blocks, hLimit) {
+      var ws = masks.ws, hs = masks.hs, rows = new Uint8Array(hs);
+      var boxes = bubbles.concat(blocks).map(function (b) {
+        return { x0: Math.floor(b.x0 / SCALE) - 1, y0: Math.floor(b.y0 / SCALE) - 1,
+                 x1: Math.ceil(b.x1 / SCALE) + 1, y1: Math.ceil(b.y1 / SCALE) + 1 };
+      });
+      var rowMin = new Int32Array(hs).fill(ws), rowMax = new Int32Array(hs).fill(-1);
+      for (var ys = 0; ys < hs; ys++) {
+        for (var xs = 0; xs < ws; xs++) {
+          if (!masks.far[ys * ws + xs]) { continue; }
+          var covered = false;
+          for (var k = 0; k < boxes.length; k++) {
+            var b = boxes[k];
+            if (xs >= b.x0 && xs <= b.x1 && ys >= b.y0 && ys <= b.y1) { covered = true; break; }
+          }
+          if (covered) { continue; }
+          rows[ys] = 1;
+          if (xs < rowMin[ys]) { rowMin[ys] = xs; }
+          if (xs > rowMax[ys]) { rowMax[ys] = xs; }
+        }
+      }
+      var bands = [], start = -1;
+      for (var y = 0; y <= hs; y++) {
+        var on = y < hs && rows[y];
+        if (on && start < 0) { start = y; }
+        if (!on && start >= 0) {
+          var x0 = ws, x1 = -1;
+          for (var q = start; q < y; q++) { x0 = Math.min(x0, rowMin[q]); x1 = Math.max(x1, rowMax[q]); }
+          bands.push({ y0: start * SCALE, y1: Math.min(hLimit, y * SCALE), x0: x0 * SCALE, x1: (x1 + 1) * SCALE });
+          start = -1;
+        }
+      }
+      var merged = [];
+      bands.forEach(function (b) {
+        var last = merged[merged.length - 1];
+        if (last && b.y0 - last.y1 <= 2 * SCALE) {
+          last.y1 = b.y1; last.x0 = Math.min(last.x0, b.x0); last.x1 = Math.max(last.x1, b.x1);
+        } else { merged.push(b); }
+      });
+      return merged.filter(function (b) { return b.y1 - b.y0 >= 8; });
+    }
+
+    /* 行段裁片放大两倍拼成一张图识别，小字才看得清；裁片里的气泡与大块涂成底色 */
+    async function ocrMetaBands(wk, tile, bands, bubbles, blocks, hLimit, bg, dark) {
+      if (!bands.length) { return []; }
+      var pad = 8, gap = 30, scale = 2;
+      var crops = bands.map(function (b) {
+        return { x0: Math.max(0, b.x0 - pad), x1: Math.min(tile.w, b.x1 + pad),
+                 y0: Math.max(0, b.y0 - pad), y1: Math.min(hLimit, b.y1 + pad), oy: 0, sh: 0 };
+      });
+      var totalH = 0, totalW = 0;
+      crops.forEach(function (c) {
+        c.oy = totalH; c.sh = (c.y1 - c.y0) * scale;
+        totalH += c.sh + gap;
+        totalW = Math.max(totalW, (c.x1 - c.x0) * scale);
+      });
+      var canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(totalW);
+      canvas.height = Math.ceil(totalH);
+      var ctx = canvas.getContext('2d');
+      var bgCss = 'rgb(' + Math.round(bg[0]) + ',' + Math.round(bg[1]) + ',' + Math.round(bg[2]) + ')';
+      ctx.fillStyle = bgCss;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      var boxes = bubbles.concat(blocks);
+      function paintBoxes(target, c, ox, oy) {
+        boxes.forEach(function (b) {
+          var by0 = Math.max(b.y0 - 4, c.y0), by1 = Math.min(b.y1 + 4, c.y1);
+          var bx0 = Math.max(b.x0 - 4, c.x0), bx1 = Math.min(b.x1 + 4, c.x1);
+          if (by1 <= by0 || bx1 <= bx0) { return; }
+          target.fillStyle = bgCss;
+          target.fillRect(ox + (bx0 - c.x0) * scale, oy + (by0 - c.y0) * scale, (bx1 - bx0) * scale, (by1 - by0) * scale);
+        });
+      }
+      crops.forEach(function (c) {
+        ctx.drawImage(tile.canvas, c.x0, c.y0, c.x1 - c.x0, c.y1 - c.y0, 0, c.oy, (c.x1 - c.x0) * scale, c.sh);
+        paintBoxes(ctx, c, 0, c.oy);
+      });
+      if (dark) { invertCanvas(canvas); }
+
+      var res = await wk.recognize(canvas);
+      if (window.__wtTrace) {
+        window.__wtTrace.push({ crops: crops.map(function (c) { return [c.x0, c.x1, c.y0, c.y1, Math.round(c.oy)]; }),
+          lines: (res.data.lines || []).map(function (l) { return [l.text.trim(), Math.round(l.bbox.y0), Math.round(l.bbox.y1), Math.round(l.bbox.x0), Math.round(l.confidence)]; }) });
+      }
+      var perCrop = crops.map(function () { return []; });
+      (res.data.lines || []).forEach(function (l) {
+        var text = cleanText(l.text);
+        if (!hasContent(text) || UI_NOISE[text]) { return; }
+        var bb = l.bbox, cy = (bb.y0 + bb.y1) / 2;
+        for (var i = 0; i < crops.length; i++) {
+          var c = crops[i];
+          if (cy >= c.oy && cy < c.oy + c.sh) {
+            perCrop[i].push({ text: text, conf: l.confidence || 0,
+                              x0: c.x0 + bb.x0 / scale, x1: c.x0 + bb.x1 / scale,
+                              y0: c.y0 + (bb.y0 - c.oy) / scale, y1: c.y0 + (bb.y1 - c.oy) / scale });
+            return;
+          }
+        }
+      });
+
+      /* 同一行段里出现横向并排的多段结果，说明版面分析把一行拆碎了，用单行模式重识别这一段 */
+      var out = [];
+      for (var ci = 0; ci < crops.length; ci++) {
+        var ls = perCrop[ci];
+        if (ls.length > 1 && hasSameRow(ls)) {
+          var c = crops[ci];
+          var single = cropCanvas(tile, c.x0, c.y0, c.x1, c.y1, scale);
+          paintBoxes(single.getContext('2d'), c, 0, 0);
+          if (dark) { invertCanvas(single); }
+          await wk.setParameters({ tessedit_pageseg_mode: '7' });
+          var res2 = await wk.recognize(single);
+          await wk.setParameters({ tessedit_pageseg_mode: '6' });
+          var text2 = cleanText(res2.data.text);
+          if (hasContent(text2) && !UI_NOISE[text2]) {
+            out.push({ text: text2, conf: res2.data.confidence || 0,
+                       x0: c.x0 + pad, x1: c.x1 - pad, y0: c.y0 + pad, y1: c.y1 - pad });
+          }
+          continue;
+        }
+        ls.forEach(function (l) { out.push(l); });
+      }
+      return out;
+    }
+
+    function hasSameRow(ls) {
+      for (var i = 0; i < ls.length; i++) {
+        for (var j = i + 1; j < ls.length; j++) {
+          var ov = Math.min(ls[i].y1, ls[j].y1) - Math.max(ls[i].y0, ls[j].y0);
+          if (ov > 0.5 * Math.min(ls[i].y1 - ls[i].y0, ls[j].y1 - ls[j].y0)) { return true; }
+        }
+      }
+      return false;
+    }
+
+    /* ---------------- 群聊昵称 ---------------- */
+
+    function looksLikeName(t) { return t.length > 0 && t.length <= 24 && !TIME_RE.test(t) && !SYSTEM_RE.test(t); }
+
+    function attachNames(items, medH) {
+      var out = [];
+      for (var i = 0; i < items.length; i++) {
+        var cur = items[i], nxt = items[i + 1];
+        if (cur.role === 'meta' && nxt && nxt.role === 'other'
+            && looksLikeName(cur.text)
+            && nxt.y0 - cur.y1 < 1.5 * medH
+            && Math.abs(nxt.x0 - cur.x0) < 3 * medH) {
+          nxt.speaker = cur.text;
+          continue;
+        }
+        out.push(cur);
+      }
+      return out;
+    }
+
+    /* ---------------- 输出 ---------------- */
+
+    function render(msgs, fmt, me, other) {
+      var out = [];
+      msgs.forEach(function (m) {
+        var who = m.role === 'me' ? me : (m.speaker || other);
+        if (fmt === 'md') {
+          out.push(m.role === 'meta' ? '> ' + m.text : '**' + who + '**：' + m.text);
+          out.push('');
+        } else {
+          out.push(m.role === 'meta' ? '［' + m.text + '］' : who + '：' + m.text);
+        }
+      });
+      return out.join('\n') + '\n';
+    }
+
+    function drawDebug(img, tiles, items, blocks) {
+      var W = img.naturalWidth, H = img.naturalHeight;
+      var s = Math.min(1, 720 / W, 12000 / H);
+      var c = document.createElement('canvas');
+      c.width = Math.round(W * s);
+      c.height = Math.round(H * s);
+      var ctx = c.getContext('2d');
+      tiles.forEach(function (t) {
+        ctx.drawImage(t.canvas, 0, 0, t.w, t.used, 0, Math.round(t.y0 * s), c.width, Math.round(t.used * s));
+      });
+      var palette = { me: '#00aa00', other: '#1e6eff', meta: '#8c8c8c' };
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = '#c04040';
+      blocks.forEach(function (b) { ctx.strokeRect(b.x0 * s, b.y0 * s, (b.x1 - b.x0) * s, (b.y1 - b.y0) * s); });
+      ctx.setLineDash([]);
+      ctx.lineWidth = 3;
+      ctx.font = '14px sans-serif';
+      items.forEach(function (m) {
+        ctx.strokeStyle = palette[m.role];
+        ctx.strokeRect(m.x0 * s, m.y0 * s, (m.x1 - m.x0) * s, (m.y1 - m.y0) * s);
+        if (m.speaker) { ctx.fillStyle = palette[m.role]; ctx.fillText(m.speaker, m.x0 * s, (m.y0 - 8) * s); }
+      });
+      return c;
+    }
+
+    /* ---------------- 主流程 ---------------- */
+
+    async function processImage(img, index, total) {
+      var W = img.naturalWidth, H = img.naturalHeight;
+      var wk = await getWorker();
+      var items = [], blocksAll = [], tiles = [], debugTiles = [];
+      var bg = null, dark = false, y = 0;
+      var nTiles = Math.max(1, Math.ceil(H / TILE_H));
+
+      while (y < H) {
+        var tile = makeTile(img, y, Math.min(H, y + TILE_H + SEARCH));
+        if (!bg) { bg = tileBackground(tile); dark = luminance(bg) < 128; }
+        var used = tile.y1 < H ? findCut(tile, bg, TILE_H) : tile.h;
+        if (used <= 0) { used = tile.h; }
+        tile.used = used;
+        tiles.push(tile);
+
+        setStatus('第 ' + (index + 1) + '/' + total + ' 张图，识别第 ' + (tiles.length) + '/' + nTiles + ' 块……',
+          0.15 + 0.85 * ((index + Math.min(1, tiles.length / nTiles)) / total));
+
+        var masks = buildMasks(tile, used, bg);
+        var bubbles = pickBubbles(components(masks.me, masks.ws, masks.hs), 'me', W)
+          .concat(pickBubbles(components(masks.other, masks.ws, masks.hs), 'other', W));
+        var rest = new Uint8Array(masks.far.length);
+        for (var i = 0; i < rest.length; i++) { rest[i] = masks.far[i] && !masks.me[i] && !masks.other[i] ? 1 : 0; }
+        var blocks = pickBlocks(components(rest, masks.ws, masks.hs), bubbles);
+
+        var texts = await ocrBubbles(wk, tile, bubbles, used, dark, bg);
+        bubbles.forEach(function (b, bI) {
+          if (!texts[bI]) { return; }
+          items.push({ role: b.role, speaker: '', text: texts[bI], x0: b.x0, y0: b.y0 + y, x1: b.x1, y1: b.y1 + y });
+        });
+
+        var bands = findMetaBands(masks, bubbles, blocks, used);
+        var metas = await ocrMetaBands(wk, tile, bands, bubbles, blocks, used, bg, dark);
+        metas.forEach(function (m) {
+          items.push({ role: 'meta', speaker: '', text: m.text, x0: m.x0, y0: m.y0 + y, x1: m.x1, y1: m.y1 + y });
+        });
+        blocks.forEach(function (b) { blocksAll.push({ x0: b.x0, y0: b.y0 + y, x1: b.x1, y1: b.y1 + y }); });
+        debugTiles.push({ y: y, used: used, bubbles: bubbles, blocks: blocks, metas: metas });
+
+        y += used;
+      }
+
+      items.sort(function (a, b) { return a.y0 - b.y0 || a.x0 - b.x0; });
+      var metaH = items.filter(function (m) { return m.role === 'meta'; }).map(function (m) { return m.y1 - m.y0; });
+      metaH.sort(function (a, b) { return a - b; });
+      var medH = metaH.length ? metaH[Math.floor(metaH.length / 2)] : 30;
+      items = attachNames(items, medH);
+      return { msgs: items, tiles: tiles, blocks: blocksAll, debug: debugTiles, bg: bg, dark: dark };
+    }
+
+    var lastMsgs = [];
+
+    function showResult() {
+      var fmt = $('wt-format').value;
+      var text = render(lastMsgs, fmt, $('wt-me').value || '我', $('wt-other').value || '对方');
+      $('wt-text').value = text;
+      var a = $('wt-download');
+      if (a.href && a.href.indexOf('blob:') === 0) { URL.revokeObjectURL(a.href); }
+      a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+      a.download = fmt === 'md' ? 'chat.md' : 'chat.txt';
+      a.textContent = fmt === 'md' ? '下载 .md' : '下载 .txt';
+      $('wt-result').hidden = false;
+    }
+
+    async function run(files) {
+      files = Array.prototype.filter.call(files, function (f) { return /^image\//.test(f.type); });
+      if (!files.length || busy) { return; }
+      busy = true;
+      $('wt-result').hidden = true;
+      var wrap = $('wt-canvas-wrap');
+      wrap.innerHTML = '';
+      wrap.hidden = true;
+      lastMsgs = [];
+      try {
+        for (var i = 0; i < files.length; i++) {
+          var img = await loadImage(files[i]);
+          var r = await processImage(img, i, files.length);
+          window.__wtLast = { img: img, result: r };
+          lastMsgs = lastMsgs.concat(r.msgs);
+          if ($('wt-debug').checked) {
+            wrap.appendChild(drawDebug(img, r.tiles, r.msgs, r.blocks));
+            wrap.hidden = false;
+          }
+        }
+        var n = lastMsgs.filter(function (m) { return m.role !== 'meta'; }).length;
+        $('wt-count').textContent = '共 ' + n + ' 条消息';
+        setStatus(lastMsgs.length ? '识别完成．' : '没有识别到文字，确认图片是否清晰．', 1);
+        showResult();
+      } catch (e) {
+        setStatus('出错了，' + (e && e.message ? e.message : e), 0, true);
+      } finally {
+        busy = false;
+      }
+    }
+
+    /* ---------------- 事件绑定 ---------------- */
+
+    var drop = $('wt-drop'), fileInput = $('wt-file');
+    drop.addEventListener('click', function () { fileInput.click(); });
+    drop.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+    });
+    fileInput.addEventListener('change', function () { run(fileInput.files); fileInput.value = ''; });
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('is-over'); });
+    });
+    ['dragleave', 'drop'].forEach(function (ev) {
+      drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('is-over'); });
+    });
+    drop.addEventListener('drop', function (e) { run(e.dataTransfer.files); });
+    document.addEventListener('paste', function (e) {
+      var its = e.clipboardData && e.clipboardData.items;
+      if (!its) { return; }
+      var files = [];
+      for (var i = 0; i < its.length; i++) {
+        if (its[i].kind === 'file' && /^image\//.test(its[i].type)) { files.push(its[i].getAsFile()); }
+      }
+      if (files.length) { e.preventDefault(); run(files); }
+    });
+
+    ['wt-format', 'wt-me', 'wt-other'].forEach(function (id) {
+      $(id).addEventListener('change', function () { if (lastMsgs.length) { showResult(); } });
+    });
+
+    $('wt-copy').addEventListener('click', function () {
+      var btn = $('wt-copy');
+      navigator.clipboard.writeText($('wt-text').value).then(function () {
+        btn.textContent = '已复制';
+        setTimeout(function () { btn.textContent = '复制文本'; }, 1500);
+      }, function () {
+        $('wt-text').select();
+        document.execCommand('copy');
+      });
+    });
+
+    /* 调试入口 */
+    window.__wt = { processImage: processImage, makeTile: makeTile, buildMasks: buildMasks, components: components,
+      pickBubbles: pickBubbles, ocrBubbles: ocrBubbles, findMetaBands: findMetaBands, ocrMetaBands: ocrMetaBands,
+      getWorker: getWorker, cropCanvas: cropCanvas };
+
+    /* 测试用：?img=同源图片地址，直接加载并识别 */
+    var param = query.get('img');
+    if (param) {
+      fetch(param).then(function (r) { return r.blob(); }).then(function (b) {
+        run([new File([b], 'sample.png', { type: b.type || 'image/png' })]);
+      }).catch(function (e) { setStatus('加载测试图失败，' + e.message, 0, true); });
+    }
+  })();
+</script>
+
+{{- end }}

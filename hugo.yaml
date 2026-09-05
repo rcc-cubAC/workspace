@@ -31,6 +31,11 @@ params:
   defaultTheme: auto
   math: true
 
+  # 首页与归档只列这两个栏目，工具栈与会议日历不混进来
+  mainSections:
+    - notes
+    - papers
+
   # 主题默认的 :date_long 在本站的语言设置下会落回英文，这里显式指定中文格式
   DateFormat: "2006年1月2日"
 
@@ -56,6 +61,9 @@ menu:
     - name: 会议日历
       url: timeline/
       weight: 25
+    - name: 工具栈
+      url: tools/
+      weight: 27
     - name: 标签
       url: tags/
       weight: 30
