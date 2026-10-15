@@ -29,6 +29,7 @@ content/notes/geo/discrete-laplacian/
 - `content/notes/geo/` 数字几何处理笔记，当前主线，线上地址 `/workspace/notes/geo/`
 - `content/notes/robotics/` 机器人与 VLA 笔记，线上地址 `/workspace/notes/robotics/`
 - `content/notes/` 其他笔记
+- `content/murmurs/` 碎碎念，线上地址 `/workspace/murmurs/`
 - `content/papers/` 论文阅读记录
 
 新建几何笔记必须显式指定模板，因为 Hugo 按路径首层目录名匹配模板，写 `notes/geo/` 时它找的是 `archetypes/notes.md`：

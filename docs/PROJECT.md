@@ -29,6 +29,7 @@ content/            正文
   notes/            笔记
     geo/            数字几何处理，当前主线
     robotics/       机器人与 VLA
+  murmurs/          碎碎念
   papers/           论文阅读记录
   archives.md       归档页
   search.md         站内搜索页
