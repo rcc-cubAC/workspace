@@ -23,6 +23,11 @@ summary: 从原理推导到离散形式，再到约 100 行的二维实现，原
 .post-content figure{margin:18px 0 22px;max-width:100%}
 .post-content figure svg{width:100%;height:auto;display:block;max-width:100%}
 .post-content figcaption{font-size:.88rem;color:var(--muted);margin-top:8px}
+.post-content .katex-display{overflow-x:auto;overflow-y:hidden;padding:4px 0}
+.post-content details{border:1px solid var(--line);border-left:4px solid var(--math);border-radius:0 8px 8px 0;padding:8px 14px;margin:14px 0 22px;background:var(--surface)}
+.post-content details summary{cursor:pointer;font-weight:600;color:var(--math)}
+.post-content details[open] summary{margin-bottom:10px}
+.post-content details>:last-child{margin-bottom:0}
 .post-content .fig-img{border:1px solid var(--line);border-radius:8px;max-width:100%}
 .post-content .svg-t{font-size:13px;fill:var(--fg)}
 .post-content .svg-s{font-size:11.5px;fill:var(--muted)}
@@ -79,11 +84,22 @@ summary: 从原理推导到离散形式，再到约 100 行的二维实现，原
 
 ## 原理
 
-### 从曲面到指示函数
+直接把点连成面是一个组合问题，要决定哪些点相邻、缺口怎么补、噪声点算不算数，每一条都没有统一的准则．泊松重建换了一个对象．它不找曲面，而是找一个定义在整个空间上的函数，物体内部为 1，外部为 0，曲面只是这个函数从 0 到 1 的交界．这样一换，点云给出的法线就变成了这个函数梯度的采样，“让梯度等于法线场”是一个线性方程，缺口由方程自动补全，噪声由最小二乘平均掉．
 
-定义指示函数 $\chi$：物体内部为 1，外部为 0．曲面就是 $\chi$ 的 0.5 等值面．于是“找曲面”变成“找一个函数”．
+下面分四步回答四个问题：
 
-关键观察：$\chi$ 在内部、外部都是常数，梯度为零；只在曲面处从 0 跳到 1．所以 $\nabla\chi$ 只在曲面上非零，方向沿法线（指向内部），强度是 $\delta$ 函数．曲面的法线场，就是指示函数的梯度场．而点云正好给了法线的采样，所以我们手里有的是 $\nabla\chi$ 的采样．
+1. 这个函数的梯度和曲面的法线到底是什么关系．
+2. 有限个带法线的点，怎样变成一个处处有定义、可以计算的向量场 $V$．
+3. 为什么“梯度等于 $V$”只能近似满足，近似的准则是什么．
+4. 这个准则为什么恰好等价于一个泊松方程．
+
+每一步只保留一条主论证，配一幅图．其余的严格推导和另一种解释收在“展开”块里，不影响主线．最后用一张表把原理里的每个对象对应到工程化里的实现．
+
+### 指示函数的梯度就是法线
+
+这一步要回答的是，曲面的法线和“找一个函数”之间有什么关系．
+
+定义指示函数 $\chi$，物体内部为 1，外部为 0．它在内部和外部都是常数，梯度为零，只在曲面上从 0 跳到 1，所以 $\nabla\chi$ 集中在曲面上，方向是内法线，也就是从外部的 0 指向内部的 1，强度是 $\delta$ 函数．一维的情形看得最清楚，区间 $[a, b]$ 的指示函数是一个台阶，导数是 $a$ 处向上、$b$ 处向下的两个 $\delta$ 尖，正负号正好是两个端点的“内法线”方向．
 
 <figure>
 <svg viewBox="0 0 760 215" role="img" aria-label="一维指示函数、平滑后的版本和它的导数">
@@ -117,39 +133,32 @@ summary: 从原理推导到离散形式，再到约 100 行的二维实现，原
 <figcaption>一维版本．物体是区间 [a, b]．台阶的导数是两个 δ 尖，平滑后变成两个鼓包；鼓包的符号就是该边界点的“内法线”方向．</figcaption>
 </figure>
 
-<div class="lanes">
-  <div class="lane e"><span class="tag">工程</span><p>法线方向必须一致（都朝内或都朝外）．这是唯一的前置要求，PoissonRecon 不做定向，靠上游．一半翻了，$V$ 就不是任何函数的梯度．</p></div>
-  <div class="lane c"><span class="tag">代码</span><p><code>N = -np.stack([cos t, sin t], 1)</code>，负号让法线朝内．全部去掉负号等价于内外互换，曲面不变；只翻一半才会坏．</p></div>
-</div>
+$\delta$ 没法数值处理，用一个鼓包把它抹平．取一个非负、积分为 1、支撑紧的核 $F$，记 $\tilde\chi = \chi * F$．卷积的含义是，在 $q$ 处放一个鼓包 $F$，看它罩住了多少物体体积，深处内部接近 1，远处外部接近 0，曲面附近是中间值．鼓包的宽度是方法的基本尺度，比它小的细节会被抹掉，工程化里它等于网格间距，分辨率由此决定．
 
-### 平滑与梯度公式
-
-$\chi$ 不连续，梯度是分布，没法数值处理．用一个平滑核 $F$（积分为 1 的紧支撑鼓包）卷一下，记 $\tilde\chi = \chi * F$．卷积的定义本身就把两个角色分开了：
+求导与卷积可以交换，$\nabla\tilde\chi = (\nabla\chi) * F$，而 $\nabla\chi$ 就是曲面上的内法线，于是
 
 $$
-(\chi * F)(q) = \int \chi(p)\,F(q-p)\,dp = \int_M F(q-p)\,dp
+\nabla\tilde\chi(q) = \oint_{\partial M} F(q-p)\,N_{in}(p)\,dp
 $$
 
-- $q$：评估点，“现在正在算哪一点”．最后 $\tilde\chi(q)$、$V(q)$ 都是 $q$ 的函数．
-- $p$：积分变量．一开始跑遍物体内部 $M$，用了散度定理之后只跑遍表面 $\partial M$．
+读法是，$q$ 处的梯度，等于把曲面上每一点 $p$ 的内法线按鼓包权重 $F(q-p)$ 摊到 $q$ 来，再加起来，离 $q$ 远的点权重接近零，不起作用．这条公式是整个方法的基础．右边只用到曲面在哪、法线朝哪，恰好是点云给的信息，不需要知道物体内部长什么样．
 
-直观意义：以 $q$ 为中心放一个鼓包 $F$，看它罩住了多少物体体积．深处内部 ≈ 1，远处外部 ≈ 0，表面附近是中间值．
+<details>
+<summary>展开看严格推导与几何解释</summary>
 
-对它求梯度：
+从卷积的定义出发，分三步．
 
 $$
 \nabla\tilde\chi(q) = \int_M \nabla_q F(q-p)\,dp = -\int_M \nabla_p F(q-p)\,dp = \oint_{\partial M} F(q-p)\,N_{in}(p)\,dp
 $$
 
-三个等号分别是三件事：
+1. 第一个等号把导数穿进积分．积分变量是 $p$，$q$ 只是参数，区域 $M$ 与 $q$ 无关，可以交换顺序，把积分想成对很多小方块求和，“和的导数等于导数的和”．
+2. 第二个等号把对 $q$ 的导数换成对 $p$ 的导数．$F$ 吃的是差 $q-p$，链式法则给出 $\partial_{q_x}F(q-p) = -\partial_{p_x}F(q-p)$．换成对积分变量求导，才能用下一步．
+3. 第三个等号是散度定理的梯度形式 $\int_M \nabla g\,dp = \oint_{\partial M} g\,N_{out}\,dp$，取 $g = F(q-p)$，前面的负号把外法线翻成内法线．
 
-1. 导数穿进积分．积分是对 $p$ 做的，$q$ 只是参数，区域 $M$ 与 $q$ 无关，可以交换顺序．把积分想成对很多小方块求和，“和的导数 = 导数的和”．
-2. 对 $q$ 求导等于负的对 $p$ 求导．$F$ 吃的是差值 $q-p$，链式法则：$\partial_{q_x}F(q-p) = F_x\cdot(+1)$，$\partial_{p_x}F(q-p) = F_x\cdot(-1)$．换成对积分变量求导，才能用下一条．
-3. 体积分变面积分．散度定理（梯度形式）$\int_M \nabla g\,dp = \oint_{\partial M} g\,N_{out}\,dp$，取 $g = F(q-p)$．负号把外法线翻成内法线．
+一维的对照是牛顿-莱布尼茨公式 $\int_a^b g'(p)\,dp = g(b)\cdot(+1) + g(a)\cdot(-1)$，可以读成“对边界点求和，每点乘上外法线”，$b$ 处外法线为 $+1$，$a$ 处为 $-1$．散度定理就是它的三维版，边界从两个点变成一张面，$\pm 1$ 变成法线向量．
 
-> 一维的对照是牛顿-莱布尼茨公式 $\int_a^b g'(p)\,dp = g(b)\cdot(+1) + g(a)\cdot(-1)$，它可以读成“对边界点求和，每点乘上外法线”（$b$ 处外法线 +1，$a$ 处 −1）．散度定理就是它的三维版：边界从两个点变成一张面，±1 变成法线向量．
-
-不用散度定理，用几何也能看出来：梯度的 x 分量是“把 $q$ 右移 $h$，$\tilde\chi$ 变了多少，除以 $h$”．鼓包右移 $h$ 等价于物体左移 $h$．左移后的物体和原物体几乎重合，差别只在表面：左侧多出一层薄壳，右侧少掉一层．壳的厚度是 $h\,|N_x|$（正对 x 方向厚 $h$，平行于 x 方向厚 0）．变化量 = 左侧薄壳里 $F$ 的积分 − 右侧薄壳里的，除以 $h$ 就是 $\oint F(q-p)\,N_{in,x}\,dS$．内部完全抵消，所以只剩表面积分．
+不用散度定理，几何上也能看出来．梯度的 $x$ 分量是“把 $q$ 右移 $h$，$\tilde\chi$ 变了多少，除以 $h$”．鼓包右移 $h$ 等价于物体左移 $h$．左移后的物体和原物体几乎重合，差别只在曲面附近，左侧多出一层薄壳，右侧少掉一层，壳的厚度是 $h\,|N_x|$，正对 $x$ 方向的地方厚 $h$，平行于 $x$ 方向的地方厚 0．变化量等于左侧薄壳里 $F$ 的积分减去右侧薄壳里的，除以 $h$ 就是 $\oint F(q-p)\,N_{in,x}\,dS$．内部完全抵消，所以只剩曲面积分．
 
 <figure>
 <svg viewBox="0 0 680 330" role="img" aria-label="把物体左移 h 后，加权体积的变化只来自表面薄壳">
@@ -175,15 +184,26 @@ $$
 <figcaption>薄壳只在表面；最上和最下两点壳厚为 0，这就是 |N_x| 因子的来源．</figcaption>
 </figure>
 
+</details>
+
+<div class="lanes">
+  <div class="lane e"><span class="tag">工程</span><p>法线方向必须一致（都朝内或都朝外）．这是唯一的前置要求，PoissonRecon 不做定向，靠上游．一半翻了，下一节的 $V$ 就不是任何函数的梯度．</p></div>
+  <div class="lane c"><span class="tag">代码</span><p><code>N = -np.stack([cos t, sin t], 1)</code>，负号让法线朝内．全部去掉负号等价于内外互换，曲面不变；只翻一半才会坏．</p></div>
+</div>
+
 ### 从点云到向量场 V
 
-走完上一节，$p$ 只跑遍表面．要算 $q$ 处的梯度，不需要知道物体内部长什么样，只需要知道表面在哪、法线朝哪，而这正是点云给的东西．把曲面积分换成对采样点求和，每个点代表一小块面积 $|P_s|$：
+这一步要回答的是，手里只有有限个点，怎样得到上一步公式右边那个处处有定义的向量场．
+
+上一步的公式右边是曲面上的积分，而点云恰好是曲面上的一组采样，每个样本 $s$ 带位置和内法线 $N_s$．把积分换成对样本求和，每个样本代表一小块面积 $|P_s|$：
 
 $$
 V(q) = \sum_s |P_s|\,F(q-s)\,N_s
 $$
 
-读法：站在 $q$ 处问“这里的梯度该是多少”，附近的采样点各自按距离权重 $F(q-s)$ 投票，票的内容是自己的法线．远处的点 $F$ 很小，几乎不投票．
+这就是投票的图像．站在 $q$ 处问“这里的梯度该是多少”，附近的样本各自按距离权重 $F(q-s)$ 投票，票的内容是自己的法线，远处的样本权重接近零，几乎不投票．$V$ 在整个空间处处有定义，不再依赖曲面本身，后面所有计算只用它．
+
+两个细节决定 $V$ 的质量．一是面积权重 $|P_s|$，采样密的地方每个样本代表的面积小，稀的地方大，不加权的话密集区会在投票里占压倒优势，这个权重由局部采样密度估计．二是鼓包宽度与采样间距的关系，鼓包比采样间距窄，$V$ 会在样本之间出现空洞，比采样间距宽得多，曲面细节被抹掉．工程化里鼓包宽度等于网格间距，所以网格深度要和采样密度匹配．
 
 <div class="lanes">
   <div class="lane e"><span class="tag">工程</span><p>要把 $V$ 存成网格上的数，就在每个节点 $o$ 记 $V(c_o)$，等价于把每个样本的法线乘 $|P_s|$，按三线性权重摊给周围 8 个节点．$|P_s|$ 由局部采样密度估计，见“摊法线”一节．</p></div>
@@ -192,7 +212,9 @@ $$
 
 ### 为什么是最小二乘
 
-想求 $\chi$ 使 $\nabla\chi = V$．但梯度场有个硬性质：旋度为零，$\nabla\times\nabla\chi = 0$．而 $V$ 是把带噪声的法线按鼓包摊开再叠加出来的，一般 $\nabla\times V \neq 0$，方程无解．
+这一步要回答的是，有了 $V$，为什么不能直接解 $\nabla\chi = V$．
+
+因为一般无解．梯度场有一个硬性质，旋度为零，$\nabla\times\nabla\chi = 0$，直观地说，沿任何闭合路径走一圈回到原点，函数值的总变化必须是零．而 $V$ 是把带噪声的法线摊开再叠加出来的，没有任何机制保证这一点，一般 $\nabla\times V \neq 0$．
 
 <figure style="max-width:260px">
 <svg viewBox="0 0 220 220" role="img" aria-label="纯旋转向量场">
@@ -212,57 +234,84 @@ $$
 <figcaption>沿它走一圈回到原点，“函数值”却一直在涨．没有任何函数的梯度长这样．</figcaption>
 </figure>
 
-无解时做最小二乘，和 $Ax=b$ 无解时解 $\min\|Ax-b\|^2$ 是一回事：找梯度最接近 $V$ 的函数．
+无解时退而求其次，找梯度最接近 $V$ 的函数，这与 $Ax = b$ 无解时改解 $\min\|Ax - b\|^2$ 是同一件事：
 
 $$
 \min_{\chi}\int\|\nabla\chi - V\|^2
 $$
 
-这一步也是方法对噪声鲁棒的来源：任何向量场可以拆成“梯度部分 + 旋转部分”，最小二乘只保留能被梯度解释的部分，噪声带来的旋转成分被自动扔掉．
+这一步同时解释了方法为什么对噪声鲁棒．任何向量场都可以拆成一个梯度场加上一个旋度部分，在合适的边界条件下两部分正交，最小二乘恰好只保留能被梯度解释的那一部分，噪声带来的旋度成分被整体扔掉，而不是被逐点拟合．
 
-### 从变分法到泊松方程
+### 从最小二乘到泊松方程
 
-最快的看法是正规方程．有限维里 $\min_x\|Ax-b\|^2$ 的解满足 $A^\top A x = A^\top b$．这里 $A = \nabla$，而 $\nabla$ 的转置是 $-\nabla\cdot$（下面会证）．代进去：
+这一步要回答的是，上面的极小化问题的解满足什么方程．
+
+最快的看法是正规方程．有限维里 $\min_x\|Ax - b\|^2$ 的解满足 $A^\top A x = A^\top b$．把 $\nabla$ 看成线性算子 $A$，关键只有一句话，梯度的转置是负散度，$\nabla^\top = -\nabla\cdot$．代进去得 $-\nabla\cdot\nabla\chi = -\nabla\cdot V$，两边去掉负号，就是要解的泊松方程：
 
 $$
-(-\nabla\cdot)(\nabla\chi) = (-\nabla\cdot)V \;\Longrightarrow\; \Delta\chi = \nabla\cdot V
+\Delta\chi = \nabla\cdot V
 $$
 
-下面逐步推导．$E$ 的输入是函数、输出是数，没法直接“对函数求导”．办法：固定一个方向 $\eta$（也是函数，边界处为零），只看沿这个方向走的一条线：
+“转置”在这里的含义和矩阵完全一样，$\langle A x, y\rangle = \langle x, A^\top y\rangle$，只是把向量换成函数，把内积换成积分．乘积法则 $\nabla\cdot(\eta W) = \nabla\eta\cdot W + \eta\,\nabla\cdot W$ 两边积分，左边由散度定理变成边界积分，取 $\eta$ 在边界为零，得到
+
+$$
+\int \nabla\eta\cdot W = -\int \eta\,(\nabla\cdot W)
+$$
+
+左边是 $\langle\nabla\eta, W\rangle$，右边是 $\langle\eta, -\nabla\cdot W\rangle$，所以 $\nabla$ 的转置是 $-\nabla\cdot$．
+
+再看方程本身在说什么．散度 $\nabla\cdot V$ 衡量 $V$ 在一点附近是发散还是汇聚，$V$ 由内法线摊成，只在曲面附近有散度，曲面两侧一正一负．拉普拉斯 $\Delta\chi$ 衡量 $\chi$ 在一点的值与周围平均值的差．方程要求两者处处相等，于是 $\chi$ 恰好在曲面处完成从 0 到 1 的跨越；离开曲面的地方 $\nabla\cdot V = 0$，方程退化为 $\Delta\chi = 0$，$\chi$ 等于邻域平均，既不鼓起也不凹陷．没有采样点的缺口就是这样被补上的，解在那里是最平滑的延拓，这也是“常见问题”里开放点云会被封口的原因．
+
+还有一点要说明．方程两边都只涉及 $\chi$ 的导数，$\chi$ 加任意常数仍是解，整体高度要靠边界条件来定；离散之后 $\tilde\chi$ 也不严格落在 0 到 1 之间，所以等值不取 0.5，而取样本处的平均．这两点分别见“边界条件”与“等值面与 marching cubes”两节．
+
+<details>
+<summary>展开看完整的变分推导</summary>
+
+正规方程是有限维的类比，严格的做法是变分法，结论相同．记 $E(\chi) = \int\|\nabla\chi - V\|^2$．$E$ 的输入是函数、输出是数，没法直接“对函数求导”．办法是固定一个方向 $\eta$，它也是函数，边界处为零，只看沿这个方向走的一条线：
 
 $$
 g(\varepsilon) = E(\chi^* + \varepsilon\eta)
 $$
 
-$g$ 是 $\mathbb{R}\to\mathbb{R}$ 的普通函数．逻辑链：
+$g$ 是普通的一元函数．逻辑链有三步：
 
-1. 假设 $\chi^*$ 是最小值点（这是前提，不是推出来的；$\chi^*$ 是未知数，先给它起个名字）．
-2. 所以沿任何方向走出去 $E$ 都不变小，每条线上 $g$ 在 $\varepsilon=0$ 处取最小值．
-3. 一元函数在内点取最小值，导数为零：$g'(0)=0$．注意是先把 $g$ 当 $\varepsilon$ 的函数求导，再代 $\varepsilon = 0$．
+1. 假设 $\chi^*$ 是最小值点．这是前提，不是推出来的，$\chi^*$ 是未知数，先给它起个名字．
+2. 所以沿任何方向走出去 $E$ 都不变小，每条线上 $g$ 在 $\varepsilon = 0$ 处取最小值．
+3. 一元函数在内点取最小值，导数为零，$g'(0) = 0$．注意是先把 $g$ 当 $\varepsilon$ 的函数求导，再代 $\varepsilon = 0$．
 
-> 有限维的对照是 $f(x,y) = (x-1)^2 + (y-2)^2$．设最小值点 $(x^*,y^*)$，任取方向 $d$，$g(\varepsilon) = f(x^*+\varepsilon d_1, y^*+\varepsilon d_2)$，$g'(0) = 2(x^*-1)d_1 + 2(y^*-2)d_2 = 0$ 对所有 $d$．取 $d=(1,0)$ 得 $x^*=1$，取 $d=(0,1)$ 得 $y^*=2$．“对所有方向 $g'(0)=0$” 和 “每个偏导为零” 是一句话．在非最小值点（比如 $(0,0)$、$d=(1,0)$），$g(\varepsilon) = \varepsilon^2 - 2\varepsilon + 5$，$g'(0) = -2 \neq 0$．
+有限维的对照是 $f(x, y) = (x-1)^2 + (y-2)^2$．设最小值点为 $(x^*, y^*)$，任取方向 $d$，$g(\varepsilon) = f(x^* + \varepsilon d_1,\, y^* + \varepsilon d_2)$，$g'(0) = 2(x^*-1)d_1 + 2(y^*-2)d_2 = 0$ 对所有 $d$ 成立．取 $d = (1, 0)$ 得 $x^* = 1$，取 $d = (0, 1)$ 得 $y^* = 2$．“对所有方向 $g'(0) = 0$”和“每个偏导为零”是一回事．在非最小值点，比如 $(0, 0)$ 处取 $d = (1, 0)$，$g(\varepsilon) = \varepsilon^2 - 2\varepsilon + 5$，$g'(0) = -2 \neq 0$．
 
 把 $g(\varepsilon)$ 算出来．$\nabla$ 是线性的，$\varepsilon$ 是常数：
 
 $$
-g(\varepsilon) = \int\|\nabla\chi^* + \varepsilon\nabla\eta - V\|^2 = \underbrace{\int\|\nabla\chi^*-V\|^2}_{A} + 2\varepsilon\underbrace{\int(\nabla\chi^*-V)\cdot\nabla\eta}_{B} + \varepsilon^2\underbrace{\int\|\nabla\eta\|^2}_{C}
+g(\varepsilon) = \underbrace{\int\|\nabla\chi^*-V\|^2}_{A} + 2\varepsilon\underbrace{\int(\nabla\chi^*-V)\cdot\nabla\eta}_{B} + \varepsilon^2\underbrace{\int\|\nabla\eta\|^2}_{C}
 $$
 
-一条抛物线，$g'(0) = 2B$，极值条件就是 $B = 0$．接下来把 $\eta$ 上的 $\nabla$ 挪走．乘积法则 $\nabla\cdot(\eta W) = \nabla\eta\cdot W + \eta\,\nabla\cdot W$，两边积分，左边由散度定理变成边界积分，而 $\eta$ 在边界为 0，所以
-
-$$
-\int\nabla\eta\cdot W = -\int\eta\,(\nabla\cdot W)
-$$
-
-这就是“$\nabla$ 的转置是 $-\nabla\cdot$”．取 $W = \nabla\chi^* - V$：
+一条抛物线，$g'(0) = 2B$，极值条件就是 $B = 0$．再用正文里的分部积分公式把 $\eta$ 上的 $\nabla$ 挪走，取 $W = \nabla\chi^* - V$：
 
 $$
 -\int\eta\,(\Delta\chi^* - \nabla\cdot V) = 0 \quad\text{对所有 }\eta
 $$
 
-一个函数和所有 $\eta$ 的积分都为零，它只能恒为零（否则在它为正的地方放一个小鼓包当 $\eta$，积分大于零）．所以 $\Delta\chi^* = \nabla\cdot V$．星号去掉，这就是要解的泊松方程．
+一个函数和所有 $\eta$ 的积分都为零，它只能恒为零，否则在它为正的地方放一个小鼓包当 $\eta$，积分就大于零．所以 $\Delta\chi^* = \nabla\cdot V$，星号去掉，就是泊松方程．
 
-这就是最标准的变分法：先写出泛函，再加扰动取一阶项，也就是“变分”，然后分部积分，得到 Euler-Lagrange 方程．套通用公式 $\partial L/\partial\chi - \nabla\cdot\big(\partial L/\partial(\nabla\chi)\big) = 0$，$L = \|\nabla\chi - V\|^2$，得到同一个结果．
+这就是最标准的变分法，先写出泛函，再加扰动取一阶项，也就是“变分”，然后分部积分，得到 Euler-Lagrange 方程．套通用公式 $\partial L/\partial\chi - \nabla\cdot\big(\partial L/\partial(\nabla\chi)\big) = 0$，$L = \|\nabla\chi - V\|^2$，得到同一个结果．
+
+</details>
+
+### 原理到工程的对应
+
+下一节把每个连续对象换成有限个数．对应关系如下，后文按此逐项展开．
+
+| 原理里的对象 | 工程化里的对应 | 所在小节 |
+| --- | --- | --- |
+| 指示函数 $\chi$ | 节点系数向量 $x$，$\tilde\chi = \sum_o x_o F_o$ | 基函数与未知数 |
+| 鼓包 $F$ 与它的宽度 | 二次 B 样条基函数，宽度等于网格间距 $w$ | 基函数与未知数 |
+| 曲面积分换成样本求和得到的 $V$ | 法线乘 $\lvert P_s\rvert$，按三线性权重摊到节点 | 摊法线 |
+| 能量 $\int\lVert\nabla\chi - V\rVert^2$ | 系数的二次函数，$L_{oo'} = \int\nabla F_o\cdot\nabla F_{o'}$，$b_o = \int\nabla F_o\cdot V$ | 矩阵 L 与右端 b |
+| 泊松方程 $\Delta\chi = \nabla\cdot V$ | 稀疏线性方程组 $Lx = b$ | 矩阵 L 与右端 b、求解 |
+| $\chi$ 只确定到差一个常数 | Dirichlet 或 Neumann 边界条件 | 边界条件 |
+| 等值面 | marching cubes，等值取样本处的平均 | 等值面与 marching cubes |
 
 ## 工程化
 
